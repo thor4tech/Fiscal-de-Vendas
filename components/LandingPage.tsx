@@ -47,11 +47,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, theme 
   const handleGoogleLogin = async () => {
     try {
       setAuthError(null);
+      setIsLoading(true);
       await signInWithPopup(auth, googleProvider);
+      // Sucesso é tratado pelo onAuthStateChanged no App.tsx
       setShowModal(false);
     } catch (error: any) {
-      console.error(error);
-      setAuthError("Erro ao conectar com Google. Tente novamente.");
+      console.error("Google Auth Error:", error);
+      let msg = "Erro ao conectar com Google.";
+      if (error.code === 'auth/popup-closed-by-user') msg = "Login cancelado.";
+      setAuthError(msg);
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -78,7 +84,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, theme 
       }
     } catch (error: any) {
       let msg = "Ocorreu um erro.";
-      if (error.code?.includes('wrong-password') || error.code?.includes('not-found')) msg = "Credenciais inválidas.";
+      if (error.code?.includes('wrong-password') || error.code?.includes('not-found') || error.code?.includes('invalid-credential')) msg = "Email ou senha incorretos.";
       else if (error.code?.includes('email-already-in-use')) msg = "Email já cadastrado.";
       setAuthError(msg);
     } finally {
