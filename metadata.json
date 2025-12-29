@@ -1,0 +1,8 @@
+{
+  "name": "Fiscal de Venda",
+  "description": "Uma plataforma premium de auditoria de vendas baseada em IA que analisa conversas do WhatsApp para identificar gargalos e recuperar vendas perdidas.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
