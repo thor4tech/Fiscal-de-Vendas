@@ -14,7 +14,7 @@ import {
     LinearScale, 
     PointElement, 
     LineElement, 
-    BarElement,
+    BarElement, 
     Title, 
     Tooltip, 
     Legend, 
@@ -162,14 +162,17 @@ const ErrorModal: React.FC<{ message: string; onClose: () => void }> = ({ messag
 // Lazy Load Toast with Slide Animation
 const Toast: React.FC<{ message: string; type: 'success' | 'error'; onClose: () => void }> = ({ message, type, onClose }) => {
     useEffect(() => {
-        const timer = setTimeout(onClose, 3000);
+        const timer = setTimeout(onClose, 5000);
         return () => clearTimeout(timer);
     }, [onClose]);
 
     return (
-        <div className={`fixed bottom-6 right-6 px-5 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-[100] animate-fade-in-up border backdrop-blur-md ${type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-400' : 'bg-red-500/10 border-red-500/50 text-red-400'}`}>
-            {type === 'success' ? <Icons.CheckCircle className="w-5 h-5" /> : <Icons.AlertTriangle className="w-5 h-5" />}
-            <span className="text-sm font-medium">{message}</span>
+        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4 z-[100] animate-fade-in-up border backdrop-blur-md ${type === 'success' ? 'bg-green-500/10 border-green-500/50 text-green-400' : 'bg-red-500/10 border-red-500/50 text-red-400'}`}>
+            {type === 'success' ? <Icons.CheckCircle className="w-6 h-6" /> : <Icons.AlertTriangle className="w-6 h-6" />}
+            <span className="text-sm font-bold">{message}</span>
+            <button onClick={onClose} className="hover:text-white transition-colors ml-2">
+                <Icons.X className="w-4 h-4" />
+            </button>
         </div>
     );
 };
@@ -767,6 +770,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
   const [showCreditConfirm, setShowCreditConfirm] = useState(false);
   const [pendingAnalysis, setPendingAnalysis] = useState<{ content: string, name: string, type: string } | null>(null);
   const [showTutorial, setShowTutorial] = useState(false); // New tutorial state
+
+  // Handle Payment Success from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success') === 'true') {
+        setToast({ message: "Pagamento confirmado! Seu plano está ativo.", type: 'success' });
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        refreshProfile(); // Update credits/plan immediately
+    }
+  }, [refreshProfile]);
 
   // Fetch History (Initial summary load)
   useEffect(() => {

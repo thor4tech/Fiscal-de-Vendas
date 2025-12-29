@@ -5,7 +5,7 @@ import { createCheckoutSession } from '../services/firestore';
 
 interface PricingModalProps {
   onClose: () => void;
-  onBuy: (amount: number) => void; // Mantido para compatibilidade, mas não usado nos planos novos
+  onBuy: (amount: number) => void; 
   isProcessing: boolean;
   currentCredits: number;
 }
@@ -17,12 +17,12 @@ const PRICE_PRO = "price_1SjnXY8sPBgjqi0CWl78VfDb";
 export const PricingModal: React.FC<PricingModalProps> = ({ onClose, isProcessing, currentCredits }) => {
   const [isRedirecting, setIsRedirecting] = useState(false);
 
-  const handleSubscribe = async (priceId: string) => {
+  const handleSubscribe = async (priceId: string, mode: 'subscription' | 'payment') => {
     if (!auth.currentUser) return;
     
     setIsRedirecting(true);
     try {
-      const url = await createCheckoutSession(auth.currentUser.uid, priceId);
+      const url = await createCheckoutSession(auth.currentUser.uid, priceId, mode);
       window.location.assign(url);
     } catch (error) {
       console.error("Erro ao criar sessão de checkout:", error);
@@ -99,7 +99,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({ onClose, isProcessin
             <div className="space-y-6">
                 
                 {/* Vendedor Pro (Highlighted) */}
-                <div className="group relative border border-brand-primary rounded-2xl p-1 bg-gradient-to-br from-brand-primary/20 to-transparent cursor-pointer shadow-glow-sm hover:shadow-glow-md transition-all transform hover:-translate-y-1" onClick={() => handleSubscribe(PRICE_PRO)}>
+                <div className="group relative border border-brand-primary rounded-2xl p-1 bg-gradient-to-br from-brand-primary/20 to-transparent cursor-pointer shadow-glow-sm hover:shadow-glow-md transition-all transform hover:-translate-y-1" onClick={() => handleSubscribe(PRICE_PRO, 'subscription')}>
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-primary text-black text-[10px] uppercase font-extrabold px-3 py-1 rounded-full shadow-lg tracking-wide z-20">
                         RECOMENDADO
                     </div>
@@ -115,38 +115,35 @@ export const PricingModal: React.FC<PricingModalProps> = ({ onClose, isProcessin
                             </div>
                         </div>
                         <ul className="space-y-2 mb-6">
-                             <li className="flex items-center gap-2 text-xs text-white"><Icons.Check className="w-3 h-3 text-brand-primary" /> Empresas ilimitadas</li>
-                             <li className="flex items-center gap-2 text-xs text-white"><Icons.Check className="w-3 h-3 text-brand-primary" /> Dashboard avançado com IA</li>
-                             <li className="flex items-center gap-2 text-xs text-white"><Icons.Check className="w-3 h-3 text-brand-primary" /> Automações premium</li>
-                             <li className="flex items-center gap-2 text-xs text-white"><Icons.Check className="w-3 h-3 text-brand-primary" /> Suporte prioritário</li>
-                             <li className="flex items-center gap-2 text-xs text-white"><Icons.Check className="w-3 h-3 text-brand-primary" /> Análise preditiva</li>
+                             <li className="flex items-center gap-2 text-xs text-white"><Icons.Check className="w-3 h-3 text-brand-primary" /> Auditorias ILIMITADAS</li>
+                             <li className="flex items-center gap-2 text-xs text-white"><Icons.Check className="w-3 h-3 text-brand-primary" /> Histórico vitalício</li>
+                             <li className="flex items-center gap-2 text-xs text-white"><Icons.Check className="w-3 h-3 text-brand-primary" /> Scripts de Copywriting</li>
+                             <li className="flex items-center gap-2 text-xs text-white"><Icons.Check className="w-3 h-3 text-brand-primary" /> Análise de Tom de Voz</li>
                         </ul>
                         <button disabled={isLoading} className="w-full py-3 rounded-lg bg-brand-primary text-black font-bold text-sm hover:bg-brand-hover transition-colors shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-wait">
-                            {isLoading ? 'Redirecionando para Stripe...' : 'Assinar PRO'}
+                            {isLoading ? 'Redirecionando para Stripe...' : 'Quero vender mais'}
                         </button>
                     </div>
                 </div>
 
-                {/* Plano Starter */}
-                <div className="group relative border border-white/10 rounded-2xl p-6 hover:border-white/30 transition-all bg-white/[0.02] cursor-pointer hover:bg-white/[0.04]" onClick={() => handleSubscribe(PRICE_STARTER)}>
+                {/* Starter Pack */}
+                <div className="group relative border border-white/10 rounded-2xl p-6 hover:border-white/30 transition-all bg-white/[0.02] cursor-pointer hover:bg-white/[0.04]" onClick={() => handleSubscribe(PRICE_STARTER, 'payment')}>
                     <div className="flex justify-between items-start mb-4">
                         <div>
-                            <h4 className="font-bold text-white text-lg">Plano Starter</h4>
-                            <p className="text-text-muted text-xs mt-1">Para quem está começando</p>
+                            <h4 className="font-bold text-white text-lg">Starter Pack</h4>
+                            <p className="text-text-muted text-xs mt-1">Pagamento único</p>
                         </div>
                         <div className="text-right">
                             <div className="text-2xl font-bold text-white">R$ 29,90</div>
-                            <div className="text-xs text-text-muted">/mês</div>
                         </div>
                     </div>
                      <ul className="space-y-2 mb-6">
-                         <li className="flex items-center gap-2 text-xs text-text-secondary"><Icons.Check className="w-3 h-3 text-white" /> Até 3 empresas</li>
-                         <li className="flex items-center gap-2 text-xs text-text-secondary"><Icons.Check className="w-3 h-3 text-white" /> Dashboard básico</li>
-                         <li className="flex items-center gap-2 text-xs text-text-secondary"><Icons.Check className="w-3 h-3 text-white" /> Relatórios simples</li>
-                         <li className="flex items-center gap-2 text-xs text-text-secondary"><Icons.Check className="w-3 h-3 text-white" /> Suporte por email</li>
+                         <li className="flex items-center gap-2 text-xs text-text-secondary"><Icons.Check className="w-3 h-3 text-white" /> 10 auditorias</li>
+                         <li className="flex items-center gap-2 text-xs text-text-secondary"><Icons.Check className="w-3 h-3 text-white" /> Acesso total aos recursos</li>
+                         <li className="flex items-center gap-2 text-xs text-text-secondary"><Icons.Check className="w-3 h-3 text-white" /> Sem validade</li>
                     </ul>
                     <button disabled={isLoading} className="w-full py-3 rounded-lg border border-white/20 text-white font-semibold text-sm hover:bg-white hover:text-black transition-all active:scale-95 disabled:opacity-50 disabled:cursor-wait">
-                        {isLoading ? 'Processando...' : 'Assinar Starter'}
+                        {isLoading ? 'Processando...' : 'Comprar Pack'}
                     </button>
                 </div>
 

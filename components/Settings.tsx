@@ -85,12 +85,12 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
     }
   };
 
-  const handleSubscribe = async (priceId: string) => {
+  const handleSubscribe = async (priceId: string, mode: 'subscription' | 'payment') => {
     if (!auth.currentUser) return;
     
     setIsSubscribing(true);
     try {
-        const url = await createCheckoutSession(auth.currentUser.uid, priceId);
+        const url = await createCheckoutSession(auth.currentUser.uid, priceId, mode);
         window.location.assign(url);
     } catch (error: any) {
         console.error("Erro no checkout:", error);
@@ -260,37 +260,37 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
 
                     <div className="grid md:grid-cols-2 gap-6 items-stretch">
                         
-                        {/* STARTER PLAN */}
+                        {/* STARTER PACK */}
                         <div className={`relative p-8 rounded-3xl border transition-all duration-300 flex flex-col ${isPro ? 'opacity-50 grayscale border-white/5 bg-[#0a0a0a]' : 'bg-[#0a0a0a] border-white/10 hover:border-white/20 hover:bg-[#111]'}`}>
                             <div className="mb-6">
-                                <h3 className="text-xl font-bold text-white mb-2">Starter</h3>
-                                <div className="flex items-baseline gap-1">
+                                <h3 className="text-xl font-bold text-white mb-2">Starter Pack</h3>
+                                <div className="flex flex-col gap-0.5">
                                     <span className="text-3xl font-bold text-white">R$ 29,90</span>
-                                    <span className="text-sm text-text-muted">/mês</span>
+                                    <span className="text-xs text-text-muted uppercase font-bold tracking-wider">Pagamento único</span>
                                 </div>
                                 <p className="text-sm text-text-secondary mt-3 leading-relaxed">
-                                    Para quem está começando a auditar conversas e quer melhorar o fechamento.
+                                    Ideal para quem quer testar e ver resultados imediatos.
                                 </p>
                             </div>
 
                             <ul className="space-y-4 mb-8 flex-1">
                                 <li className="flex items-center gap-3 text-sm text-text-secondary">
-                                    <Icons.Check className="w-4 h-4 text-white shrink-0" /> 10 Auditorias por mês
+                                    <Icons.Check className="w-4 h-4 text-white shrink-0" /> 10 auditorias
                                 </li>
                                 <li className="flex items-center gap-3 text-sm text-text-secondary">
-                                    <Icons.Check className="w-4 h-4 text-white shrink-0" /> Análise de Prints e Texto
+                                    <Icons.Check className="w-4 h-4 text-white shrink-0" /> Acesso total aos recursos
                                 </li>
                                 <li className="flex items-center gap-3 text-sm text-text-secondary">
-                                    <Icons.Check className="w-4 h-4 text-white shrink-0" /> Histórico de 30 dias
+                                    <Icons.Check className="w-4 h-4 text-white shrink-0" /> Sem validade
                                 </li>
                             </ul>
 
                             <button 
-                                onClick={() => !isPro && handleSubscribe(PRICE_STARTER)}
+                                onClick={() => !isPro && handleSubscribe(PRICE_STARTER, 'payment')}
                                 disabled={isSubscribing || isPro}
                                 className="w-full py-4 rounded-xl border border-white/20 text-white font-bold text-sm hover:bg-white hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {isPro ? 'Incluso no Pro' : isSubscribing ? 'Processando...' : 'Assinar Starter'}
+                                {isPro ? 'Incluso no Pro' : isSubscribing ? 'Processando...' : 'Comprar Pack'}
                             </button>
                         </div>
 
@@ -310,12 +310,12 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
                                     <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
                                         Vendedor Pro <Icons.Zap className="w-5 h-5 text-yellow-400 fill-current" />
                                     </h3>
-                                    <div className="flex items-baseline gap-1">
+                                    <div className="flex flex-col gap-0.5">
                                         <span className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">R$ 97,90</span>
-                                        <span className="text-sm text-text-muted">/mês</span>
+                                        <span className="text-xs text-text-muted uppercase font-bold tracking-wider">por mês</span>
                                     </div>
                                     <p className="text-sm text-brand-primary/80 mt-3 leading-relaxed font-medium">
-                                        A ferramenta definitiva para times de alta performance e escala.
+                                        A ferramenta definitiva para times de alta performance.
                                     </p>
                                 </div>
 
@@ -326,20 +326,20 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
                                     </li>
                                     <li className="flex items-center gap-3 text-sm text-white font-medium">
                                         <div className="p-1 rounded bg-brand-primary/20"><Icons.Check className="w-3 h-3 text-brand-primary" /></div>
-                                        Dashboard de Evolução IA
+                                        Histórico vitalício
                                     </li>
                                     <li className="flex items-center gap-3 text-sm text-white font-medium">
                                         <div className="p-1 rounded bg-brand-primary/20"><Icons.Check className="w-3 h-3 text-brand-primary" /></div>
-                                        Upload de Arquivos Pesados
+                                        Scripts de Copywriting
                                     </li>
                                     <li className="flex items-center gap-3 text-sm text-white font-medium">
                                         <div className="p-1 rounded bg-brand-primary/20"><Icons.Check className="w-3 h-3 text-brand-primary" /></div>
-                                        Suporte Prioritário
+                                        Análise de Tom de Voz
                                     </li>
                                 </ul>
 
                                 <button 
-                                    onClick={() => !isPro && handleSubscribe(PRICE_PRO)}
+                                    onClick={() => !isPro && handleSubscribe(PRICE_PRO, 'subscription')}
                                     disabled={isSubscribing || isPro}
                                     className={`w-full py-4 rounded-xl font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 ${isPro ? 'bg-brand-primary/20 text-brand-primary cursor-default' : 'bg-brand-primary hover:bg-brand-hover text-black hover:scale-[1.02] shadow-brand-primary/20'}`}
                                 >
@@ -348,9 +348,11 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
                                     ) : isSubscribing ? (
                                         'Redirecionando...'
                                     ) : (
-                                        'Assinar Pro Agora'
+                                        'Quero vender mais'
                                     )}
                                 </button>
+                                
+                                <p className="text-center text-[10px] text-text-muted mt-3 relative z-10">Garantia de 7 dias ou seu dinheiro de volta.</p>
                                 
                                 {/* Background Glow */}
                                 <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-brand-primary/10 rounded-full blur-[80px] pointer-events-none"></div>

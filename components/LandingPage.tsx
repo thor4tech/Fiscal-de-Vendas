@@ -484,7 +484,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess, theme 
                      </div>
                  </div>
 
-                 {/* Pack */}
+                 {/* Starter Pack */}
                  <div className="p-8 rounded-3xl border border-white/10 bg-[#0a0a0a] flex flex-col transition-all hover:border-white/20 hover:bg-[#111]">
                      <h3 className="text-xl font-bold mb-2 text-white">Starter Pack</h3>
                      <div className="text-4xl font-bold mb-1 text-white">R$ 29,90</div>

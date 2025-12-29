@@ -124,18 +124,16 @@ export const addCredits = async (uid: string, amount: number) => {
 // STRIPE CHECKOUT (EXTENSION)
 // ==========================================
 
-export const createCheckoutSession = async (uid: string, priceId: string) => {
+export const createCheckoutSession = async (uid: string, priceId: string, mode: 'subscription' | 'payment' = 'subscription') => {
   // A coleção deve ser exata: customers/{uid}/checkout_sessions
   const collectionRef = collection(db, "customers", uid, "checkout_sessions");
   
   // Cria o documento que aciona a Cloud Function da extensão do Stripe
   const docRef = await addDoc(collectionRef, {
     price: priceId,
-    success_url: window.location.origin, 
+    success_url: `${window.location.origin}/?success=true`, // Adiciona flag para toast de sucesso
     cancel_url: window.location.origin, 
-    mode: 'subscription',
-    // client_reference_id é opcional para a criação, mas bom para webhook
-    // A chave principal é o ID do user na URL (customers/UID)
+    mode: mode, // 'subscription' para recorrente, 'payment' para único
   });
 
   return new Promise<string>((resolve, reject) => {
