@@ -4,7 +4,7 @@ import { Icons } from './ui/Icons';
 import { extractTextFromFile } from '../services/ocr';
 import { analyzeConversation, continueChat } from '../services/gemini';
 import { saveAudit, deductCredit, addCredits, getUserAudits } from '../services/firestore';
-import { AnalysisResult, User, AuditRecord, UserProfile, ChatMessage } from '../types';
+import { AnalysisResult, User, AuditRecord, UserProfile, ChatMessage, MetricDetail } from '../types';
 import { signOut } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { PricingModal } from './PricingModal';
@@ -35,16 +35,52 @@ interface DashboardProps {
   toggleTheme: () => void;
 }
 
-// Improved Tooltip Component with smooth animation
-const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
+// Improved Rich Tooltip Component
+const RichTooltip: React.FC<{ title: string, metric: MetricDetail }> = ({ title, metric }) => (
     <div className="group relative inline-block ml-2 align-middle z-10 cursor-help">
-        <Icons.Info className="w-3.5 h-3.5 text-text-muted transition-colors group-hover:text-brand-primary" />
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-[#111] border border-white/10 rounded-xl text-xs text-text-secondary text-center opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 pointer-events-none z-50 shadow-xl backdrop-blur-md">
-            {text}
+        <Icons.Info className="w-4 h-4 text-text-muted transition-colors group-hover:text-brand-primary" />
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-72 p-0 bg-[#111] border border-white/10 rounded-xl opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 pointer-events-none z-50 shadow-xl backdrop-blur-md overflow-hidden">
+            <div className="bg-white/5 px-4 py-2 border-b border-white/5">
+                <span className="text-xs font-bold text-white uppercase tracking-wider">{title}</span>
+            </div>
+            <div className="p-4 space-y-3">
+                <div>
+                    <p className="text-[10px] text-text-muted uppercase font-bold mb-1">O que é</p>
+                    <p className="text-xs text-text-secondary leading-relaxed">{metric.significado || "Avaliação da competência na venda."}</p>
+                </div>
+                <div>
+                    <p className="text-[10px] text-brand-primary uppercase font-bold mb-1">Como Melhorar</p>
+                    <p className="text-xs text-white font-medium leading-relaxed">{metric.como_melhorar || "Pratique mais esta técnica."}</p>
+                </div>
+            </div>
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#111]"></div>
         </div>
     </div>
 );
+
+// Centralized Error Modal
+const ErrorModal: React.FC<{ message: string; onClose: () => void }> = ({ message, onClose }) => {
+    return (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-fade-in">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose}></div>
+            <div className="relative w-full max-w-md bg-[#111] border border-red-500/30 rounded-2xl p-8 shadow-[0_0_50px_rgba(239,68,68,0.2)] flex flex-col items-center text-center animate-fade-in-up">
+                <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6 border border-red-500/20">
+                    <Icons.AlertTriangle className="w-8 h-8 text-red-500" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Falha na Análise</h3>
+                <p className="text-text-secondary text-sm mb-8 leading-relaxed">
+                    {message}
+                </p>
+                <button 
+                    onClick={onClose}
+                    className="px-8 py-3 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-xl transition-all w-full"
+                >
+                    Entendi, tentar novamente
+                </button>
+            </div>
+        </div>
+    );
+};
 
 // Lazy Load Toast with Slide Animation
 const Toast: React.FC<{ message: string; type: 'success' | 'error'; onClose: () => void }> = ({ message, type, onClose }) => {
@@ -61,6 +97,292 @@ const Toast: React.FC<{ message: string; type: 'success' | 'error'; onClose: () 
     );
 };
 
+interface ResultViewProps {
+  result: AnalysisResult;
+  onReset: () => void;
+  user: User;
+  userProfile: UserProfile;
+  onDeductCredit: () => void;
+  refreshProfile: () => void;
+}
+
+const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProfile, onDeductCredit, refreshProfile }) => {
+    const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'chat'>('overview');
+    const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+    const [chatInput, setChatInput] = useState('');
+    const [isChatLoading, setIsChatLoading] = useState(false);
+    const chatEndRef = useRef<HTMLDivElement>(null);
+
+    const scrollToBottom = () => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [chatHistory, isChatLoading]);
+
+    const handleSendMessage = async () => {
+        if (!chatInput.trim()) return;
+
+        const newMsg: ChatMessage = { role: 'user', text: chatInput, timestamp: Date.now() };
+        const updatedHistory = [...chatHistory, newMsg];
+
+        setChatHistory(updatedHistory);
+        setChatInput('');
+        setIsChatLoading(true);
+
+        try {
+            const responseText = await continueChat(updatedHistory, newMsg.text, result);
+            setChatHistory([...updatedHistory, { role: 'model', text: responseText, timestamp: Date.now() }]);
+        } catch (error) {
+            console.error(error);
+            setChatHistory([...updatedHistory, { role: 'model', text: "Erro ao processar mensagem. Tente novamente.", timestamp: Date.now() }]);
+        } finally {
+            setIsChatLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-bg-body text-text-primary p-6">
+            <div className="max-w-6xl mx-auto">
+                <button onClick={onReset} className="mb-6 flex items-center gap-2 text-text-muted hover:text-white transition-colors group">
+                    <Icons.ArrowRight className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" /> Voltar ao Dashboard
+                </button>
+
+                <div className="grid lg:grid-cols-3 gap-8">
+                    {/* Left Column: Summary & Navigation */}
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="glass-card p-6 rounded-2xl text-center relative overflow-hidden bg-[#111] border border-white/10">
+                            <div className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center border-4 text-4xl font-bold mb-4 shadow-xl ${
+                                result.resumo_executivo.score >= 80 ? 'border-brand-primary text-brand-primary' :
+                                result.resumo_executivo.score >= 50 ? 'border-yellow-500 text-yellow-500' : 'border-red-500 text-red-500'
+                            }`}>
+                                {result.resumo_executivo.score}
+                            </div>
+                            <h2 className={`text-2xl font-bold mb-2 ${
+                                result.resumo_executivo.classificacao === 'CRÍTICO' ? 'text-red-500' : 
+                                result.resumo_executivo.classificacao === 'EXCELENTE' ? 'text-brand-primary' : 'text-white'
+                            }`}>{result.resumo_executivo.classificacao}</h2>
+                            <p className="text-text-secondary text-sm leading-relaxed">{result.resumo_executivo.veredicto}</p>
+                        </div>
+
+                        {/* Stats Grid */}
+                         <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                <span className="text-xs text-text-muted block">Erros</span>
+                                <span className="text-lg font-bold text-red-400">{result.resumo_executivo.estatisticas.total_erros}</span>
+                            </div>
+                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                <span className="text-xs text-text-muted block">Recuperação</span>
+                                <span className="text-lg font-bold text-brand-primary">{result.resumo_executivo.estatisticas.chance_recuperacao}</span>
+                            </div>
+                         </div>
+
+                        {/* Tabs */}
+                        <div className="flex flex-col gap-2">
+                            <button onClick={() => setActiveTab('overview')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'overview' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                                <Icons.BarChart className="w-5 h-5" /> Visão Geral
+                            </button>
+                            <button onClick={() => setActiveTab('timeline')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'timeline' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                                <Icons.Clock className="w-5 h-5" /> Linha do Tempo
+                            </button>
+                            <button onClick={() => setActiveTab('chat')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'chat' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                                <Icons.MessageCircle className="w-5 h-5" /> Chat com Fiscal
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Right Column: Content */}
+                    <div className="lg:col-span-2">
+                        {activeTab === 'overview' && (
+                            <div className="space-y-6 animate-fade-in">
+                                {/* Errors Section */}
+                                {result.erros.length > 0 && (
+                                    <div className="glass-card p-6 rounded-2xl border-l-4 border-l-red-500 bg-[#1a0505] border border-red-500/20">
+                                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                            <Icons.AlertTriangle className="w-5 h-5 text-red-500" /> Erros Identificados
+                                        </h3>
+                                        <div className="space-y-4">
+                                            {result.erros.map((erro, idx) => (
+                                                <div key={idx} className="bg-red-500/5 p-4 rounded-xl border border-red-500/10">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider border border-red-500/30 px-2 py-0.5 rounded-full">{erro.gravidade}</span>
+                                                        <span className="text-xs text-text-muted">Mensagem #{erro.mensagem_numero}</span>
+                                                    </div>
+                                                    <p className="text-white font-medium mb-3 italic">"{erro.mensagem_original}"</p>
+                                                    <p className="text-sm text-red-200 mb-4 bg-red-500/10 p-2 rounded-lg"><strong className="text-red-400">Problema:</strong> {erro.por_que_erro}</p>
+                                                    <div className="bg-[#111] p-4 rounded-lg border border-white/10">
+                                                        <p className="text-xs text-green-400 font-bold mb-1 flex items-center gap-1"><Icons.CheckCircle className="w-3 h-3" /> Sugestão de Correção</p>
+                                                        <p className="text-sm text-white leading-relaxed">{erro.correcao.mensagem_corrigida}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Metrics Breakdown */}
+                                <div className="glass-card p-6 rounded-2xl border border-white/10">
+                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                        <Icons.Target className="w-5 h-5 text-blue-500" /> Métricas Detalhadas
+                                    </h3>
+                                    <div className="grid sm:grid-cols-2 gap-4">
+                                        {Object.entries(result.metricas).map(([key, value]: [string, any]) => {
+                                            if (key === 'tempo_resposta') return null; // Handle separately if needed
+                                            return (
+                                                <div key={key} className="bg-white/5 p-4 rounded-xl border border-white/5 hover:border-brand-primary/30 transition-colors">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-sm font-medium capitalize text-text-secondary">{key.replace('_', ' ')}</span>
+                                                        <span className={`text-sm font-bold ${value.nota >= 80 ? 'text-brand-primary' : value.nota >= 50 ? 'text-yellow-500' : 'text-red-500'}`}>
+                                                            {value.nota}/100
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-white/10 rounded-full h-1.5 mb-2">
+                                                        <div className={`h-1.5 rounded-full ${value.nota >= 80 ? 'bg-brand-primary' : value.nota >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${value.nota}%` }}></div>
+                                                    </div>
+                                                    <p className="text-xs text-text-muted">{value.problema || value.significado}</p>
+                                                    <div className="mt-2">
+                                                         <RichTooltip title={key.replace('_', ' ')} metric={value} />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Recovery Plan */}
+                                <div className="glass-card p-6 rounded-2xl border-l-4 border-l-brand-primary bg-[#051a10] border border-brand-primary/20">
+                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                        <Icons.TrendingUp className="w-5 h-5 text-brand-primary" /> Plano de Recuperação
+                                    </h3>
+                                    <div className="space-y-6">
+                                        {result.plano_recuperacao.sequencia.map((step, idx) => (
+                                            <div key={idx} className="flex gap-4 relative">
+                                                {idx !== result.plano_recuperacao.sequencia.length - 1 && (
+                                                    <div className="absolute left-[15px] top-8 bottom-[-24px] w-0.5 bg-white/10"></div>
+                                                )}
+                                                <div className="w-8 h-8 rounded-full bg-brand-primary text-black flex items-center justify-center font-bold shrink-0 z-10 shadow-glow-sm">
+                                                    {idx + 1}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                        <p className="text-sm text-white font-bold">{step.estrategia}</p>
+                                                        <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-text-muted whitespace-nowrap">Aguardar: {step.aguardar || 'Imediato'}</span>
+                                                    </div>
+                                                    <div className="bg-black/40 p-4 rounded-xl border border-brand-primary/10 mt-2">
+                                                        <p className="text-sm text-brand-primary font-medium italic mb-2">"{step.mensagem}"</p>
+                                                        <p className="text-xs text-text-muted">Enviar: {step.quando_enviar}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'timeline' && (
+                            <div className="space-y-6 animate-fade-in pb-10">
+                                <h3 className="text-xl font-bold text-white mb-6">Fluxo da Conversa</h3>
+                                {result.timeline.mensagens.map((msg, idx) => (
+                                    <div key={idx} className={`flex ${msg.autor === 'Vendedor' ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[85%] relative group ${msg.autor === 'Vendedor' ? 'items-end flex flex-col' : 'items-start flex flex-col'}`}>
+                                            <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-md ${
+                                                msg.autor === 'Vendedor' 
+                                                  ? 'bg-brand-primary/10 border border-brand-primary/20 text-white rounded-tr-none' 
+                                                  : 'bg-[#222] border border-white/10 text-gray-200 rounded-tl-none'
+                                            }`}>
+                                                {msg.texto}
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-2 mt-1 px-1">
+                                                <span className="text-[10px] text-text-muted">{msg.timestamp || `#${msg.numero}`}</span>
+                                                {msg.analise && (
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                                        msg.status === 'erro' ? 'bg-red-500/20 text-red-400' :
+                                                        msg.status === 'bom' ? 'bg-green-500/20 text-green-400' :
+                                                        'bg-yellow-500/20 text-yellow-500'
+                                                    }`}>
+                                                        {msg.status === 'erro' ? <Icons.AlertTriangle className="w-3 h-3" /> : 
+                                                         msg.status === 'bom' ? <Icons.CheckCircle className="w-3 h-3" /> : <Icons.Info className="w-3 h-3" />}
+                                                        {msg.analise}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {activeTab === 'chat' && (
+                            <div className="glass-card flex flex-col h-[600px] rounded-2xl overflow-hidden animate-fade-in border border-white/10">
+                                <div className="p-4 border-b border-white/5 bg-white/5 flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-brand-primary/10 flex items-center justify-center">
+                                        <Icons.ShieldCheck className="w-6 h-6 text-brand-primary" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-white">Fiscal de Venda AI</h3>
+                                        <p className="text-xs text-text-muted">Tire dúvidas sobre esta análise</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0a0a0a]">
+                                    {chatHistory.length === 0 && (
+                                        <div className="flex flex-col items-center justify-center h-full text-center p-8 opacity-50">
+                                            <Icons.MessageCircle className="w-16 h-16 mb-4 text-text-muted" />
+                                            <p className="text-text-muted max-w-xs">Pergunte como melhorar sua abordagem ou peça para reescrever uma mensagem específica.</p>
+                                        </div>
+                                    )}
+                                    {chatHistory.map((msg, idx) => (
+                                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-[80%] p-3 rounded-xl text-sm ${
+                                                msg.role === 'user' ? 'bg-brand-primary text-black font-medium' : 'bg-[#222] text-gray-200 border border-white/10'
+                                            }`}>
+                                                {msg.text}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {isChatLoading && (
+                                        <div className="flex justify-start">
+                                            <div className="bg-[#222] p-4 rounded-xl flex gap-1.5 border border-white/10">
+                                                <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce"></span>
+                                                <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-75"></span>
+                                                <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-150"></span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div ref={chatEndRef} />
+                                </div>
+                                
+                                <div className="p-4 bg-[#111] border-t border-white/10">
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="text" 
+                                            value={chatInput}
+                                            onChange={(e) => setChatInput(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                                            placeholder="Digite sua mensagem..."
+                                            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all placeholder:text-text-muted"
+                                        />
+                                        <button 
+                                            onClick={handleSendMessage}
+                                            disabled={isChatLoading || !chatInput.trim()}
+                                            className="p-3 bg-brand-primary text-black rounded-xl hover:bg-brand-hover disabled:opacity-50 transition-colors shadow-glow-sm"
+                                        >
+                                            <Icons.ArrowRight className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refreshProfile, theme, toggleTheme }) => {
   // Navigation State
   const [view, setView] = useState<'dashboard' | 'history' | 'settings'>('dashboard');
@@ -72,8 +394,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
   // Analysis State
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStatus, setProcessStatus] = useState<string>('');
+  const [processingFileName, setProcessingFileName] = useState<string>('');
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null); // Centralized error state
   const [toast, setToast] = useState<{message: string, type: 'success'|'error'} | null>(null);
   
   // UI State
@@ -125,7 +448,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
   }), [audits]);
 
   const radarData = React.useMemo(() => {
-      // Calculate average metrics from last 3 audits to show "Current Skills"
       const recent = audits.slice(0, 3);
       if (recent.length === 0) return null;
 
@@ -214,7 +536,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
      
      const { content, name, type } = pendingAnalysis;
      setIsProcessing(true);
-     setError(null);
+     setProcessingFileName(name);
+     setErrorDetails(null); // Clear previous errors
      
      try {
          setProcessStatus('🔍 Analisando padrões de conversa...');
@@ -223,7 +546,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
          const analysis = await analyzeConversation(content);
 
          setProcessStatus('📝 Gerando diagnóstico detalhado...');
-         // Ensure we save properly
          await saveAudit(user.uid, name, type, analysis);
          
          if (userProfile.plan !== 'pro') {
@@ -231,7 +553,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
          }
          refreshProfile();
          
-         // Refresh local history immediately
          const { audits: updatedAudits } = await getUserAudits(user.uid, null, 5);
          setAudits(updatedAudits);
 
@@ -239,11 +560,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
          setToast({ message: "Análise concluída com sucesso!", type: 'success' });
      } catch (err: any) {
          console.error(err);
-         setError(err.message || "Erro ao processar.");
-         setToast({ message: "Erro na análise: " + err.message, type: 'error' });
+         // SHOW CENTRALIZED ERROR MODAL
+         setErrorDetails(err.message || "Erro desconhecido ao processar.");
      } finally {
          setIsProcessing(false);
          setProcessStatus('');
+         setProcessingFileName('');
          setPendingAnalysis(null);
      }
   };
@@ -252,17 +574,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
     if (acceptedFiles.length === 0) return;
     const file = acceptedFiles[0];
     
-    setProcessStatus(`📂 Processando ${file.name}...`);
-    setIsProcessing(true); 
+    setProcessingFileName(file.name);
+    setProcessStatus(`📂 Lendo arquivo...`);
+    setIsProcessing(true);
+    setErrorDetails(null); 
 
     try {
       const text = await extractTextFromFile(file);
       setIsProcessing(false); 
-      initiateAnalysis(text, file.name, file.type.includes('image') ? 'Imagem' : file.name.endsWith('.zip') ? 'ZIP' : 'TXT');
+      initiateAnalysis(text, file.name, file.type.includes('image') ? 'Imagem' : (file.name.endsWith('.zip') || file.type.includes('zip')) ? 'ZIP' : 'TXT');
     } catch (err: any) {
-        setError(err.message);
         setIsProcessing(false);
-        setToast({ message: "Erro ao ler arquivo.", type: 'error' });
+        setProcessingFileName('');
+        setErrorDetails(err.message || "Falha ao ler o arquivo. Verifique se ele não está corrompido.");
     }
   }, [userProfile.credits]);
 
@@ -270,7 +594,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
     onDrop,
     accept: {
         'text/plain': ['.txt'],
-        'application/zip': ['.zip'],
+        'application/zip': ['.zip', '.x-zip-compressed'],
         'image/*': ['.png', '.jpg', '.jpeg']
     },
     multiple: false,
@@ -373,8 +697,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
         </div>
 
         <div className="flex items-center gap-3">
-             {/* Bell Icon Removed as requested */}
-
              <button onClick={() => setShowPricing(true)} className="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white/5 border border-white/10 rounded-full hover:border-brand-primary/50 hover:bg-white/10 active:scale-95 transition-all group">
                 <Icons.Zap className="w-3.5 h-3.5 text-brand-primary group-hover:scale-110 transition-transform" />
                 <span className="text-sm font-bold text-white">{userProfile.plan === 'pro' ? '∞' : userProfile.credits}</span>
@@ -470,36 +792,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
                         className={`
                             border-2 border-dashed rounded-2xl p-12 text-center transition-all cursor-pointer relative group
                             ${isDragActive ? 'border-brand-primary bg-brand-primary/5 scale-[1.01]' : 'border-white/10 hover:border-brand-primary hover:bg-white/5'}
-                            ${isProcessing ? 'pointer-events-none opacity-50' : ''}
+                            ${isProcessing ? 'pointer-events-none border-brand-primary/50' : ''}
                         `}
                     >
                         <input {...getInputProps()} />
                         
                         {/* Tooltip for prints */}
-                        <div className="absolute top-4 right-4 z-20">
-                            <Icons.HelpCircle className="w-5 h-5 text-text-muted hover:text-white transition-colors" />
-                            <div className="absolute right-0 top-8 w-64 bg-[#111] border border-white/20 p-3 rounded-xl text-xs text-left z-30 hidden group-hover:block shadow-xl animate-fade-in">
-                                <p className="font-bold text-white mb-1">Dica para Prints:</p>
-                                <p className="text-text-muted">Certifique-se de que as imagens tenham alta qualidade e que haja sobreposição de texto entre um print e outro para a IA conectar o contexto.</p>
+                        {!isProcessing && (
+                            <div className="absolute top-4 right-4 z-20">
+                                <Icons.HelpCircle className="w-5 h-5 text-text-muted hover:text-white transition-colors" />
+                                <div className="absolute right-0 top-8 w-64 bg-[#111] border border-white/20 p-3 rounded-xl text-xs text-left z-30 hidden group-hover:block shadow-xl animate-fade-in">
+                                    <p className="font-bold text-white mb-1">Dica para Prints:</p>
+                                    <p className="text-text-muted">Certifique-se de que as imagens tenham alta qualidade e que haja sobreposição de texto entre um print e outro para a IA conectar o contexto.</p>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        <div className="flex flex-col items-center">
-                            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-colors ${isDragActive ? 'bg-brand-primary text-black' : 'bg-brand-primary/10 text-brand-primary group-hover:scale-110 duration-300'}`}>
-                                {isProcessing ? (
-                                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-current"></div>
-                                ) : (
-                                    <Icons.Upload className="w-8 h-8" />
-                                )}
-                            </div>
-                            
+                        <div className="flex flex-col items-center justify-center min-h-[160px]">
                             {isProcessing ? (
-                                <div className="space-y-1">
-                                    <h3 className="text-xl font-bold text-white">{processStatus}</h3>
-                                    <p className="text-sm text-text-muted animate-pulse">A IA está lendo cada detalhe...</p>
+                                <div className="w-full max-w-md space-y-6">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-16 h-16 relative">
+                                            <div className="absolute inset-0 rounded-full border-4 border-white/10"></div>
+                                            <div className="absolute inset-0 rounded-full border-4 border-brand-primary border-t-transparent animate-spin"></div>
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <Icons.Sparkles className="w-6 h-6 text-brand-primary animate-pulse" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-center space-y-2">
+                                        <h3 className="text-lg font-bold text-white">{processStatus}</h3>
+                                        <p className="text-sm text-text-muted font-mono bg-white/5 px-2 py-1 rounded inline-block">
+                                            {processingFileName}
+                                        </p>
+                                    </div>
+                                    {/* Simulated Progress Bar */}
+                                    <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                                        <div className="h-full bg-brand-primary rounded-full animate-[shimmer_2s_linear_infinite] bg-[length:200%_100%] w-2/3 mx-auto"></div>
+                                    </div>
                                 </div>
                             ) : (
                                 <>
+                                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-colors ${isDragActive ? 'bg-brand-primary text-black' : 'bg-brand-primary/10 text-brand-primary group-hover:scale-110 duration-300'}`}>
+                                        <Icons.Upload className="w-8 h-8" />
+                                    </div>
+                                    
                                     <h3 className="text-xl font-bold text-white mb-2">Arraste ou clique para enviar</h3>
                                     <p className="text-text-secondary mb-4 text-sm">Suporta .txt (WhatsApp), .zip ou Prints</p>
                                     
@@ -526,7 +863,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
                                 onClick={handlePasteAnalysis}
                                 disabled={isProcessing}
                                 className="px-6 py-3 bg-brand-primary text-black font-bold rounded-xl hover:bg-brand-hover active:scale-95 transition-all shadow-glow-sm disabled:opacity-50 flex items-center gap-2"
-                             >
+                            >
                                  {isProcessing ? 'Processando...' : <>Analisar Texto <Icons.ArrowRight className="w-4 h-4" /></>}
                              </button>
                          </div>
@@ -684,391 +1021,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
           />
       )}
 
+      {/* ERROR MODAL */}
+      {errorDetails && (
+          <ErrorModal 
+            message={errorDetails} 
+            onClose={() => setErrorDetails(null)} 
+          />
+      )}
+
       {/* Toast Notification */}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
     </div>
   );
-};
-
-// ==========================================
-// RESULT VIEW (Enhanced)
-// ==========================================
-
-const ResultView: React.FC<{ 
-    result: AnalysisResult; 
-    onReset: () => void; 
-    user: User;
-    userProfile: UserProfile;
-    onDeductCredit: () => void;
-    refreshProfile: () => void;
-}> = ({ result, onReset, user, userProfile, onDeductCredit, refreshProfile }) => {
-    
-    const [showChat, setShowChat] = useState(false);
-    const [copiedId, setCopiedId] = useState<string | null>(null);
-
-    const handleCopy = (text: string, id: string) => {
-        navigator.clipboard.writeText(text);
-        setCopiedId(id);
-        setTimeout(() => setCopiedId(null), 2000);
-    };
-
-    // Standard Print for PDF
-    const handleExportPDF = () => {
-        window.print();
-    };
-
-    const getScoreColor = (score: number) => {
-        if (score >= 80) return 'text-brand-primary border-brand-primary';
-        if (score >= 50) return 'text-yellow-500 border-yellow-500';
-        return 'text-red-500 border-red-500';
-    };
-
-    return (
-        <div className="min-h-screen bg-bg-body text-text-primary font-sans pb-20 print:bg-white print:text-black">
-             {/* Navbar - Hidden on Print */}
-             <nav className="border-b border-white/5 bg-bg-elevated/80 backdrop-blur-md sticky top-0 z-50 print:hidden transition-all">
-                <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <button onClick={onReset} className="flex items-center gap-2 text-text-muted hover:text-white transition-colors group">
-                        <Icons.ArrowRight className="rotate-180 h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Voltar
-                    </button>
-                    <div className="flex items-center gap-4">
-                        <button 
-                            onClick={handleExportPDF}
-                            className="text-xs font-medium border border-white/10 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-2"
-                        >
-                            <Icons.Download className="w-3 h-3" />
-                            PDF
-                        </button>
-                        <button 
-                            onClick={() => setShowChat(true)}
-                            className="text-xs font-bold bg-brand-primary text-black px-4 py-1.5 rounded-lg hover:bg-brand-hover transition-colors flex items-center gap-2 shadow-glow-sm"
-                        >
-                            <Icons.MessageCircle className="w-3.5 h-3.5" />
-                            Chat IA
-                        </button>
-                    </div>
-                </div>
-            </nav>
-
-            <main className="max-w-5xl mx-auto px-4 py-8 space-y-8 animate-fade-in-up print:space-y-6 print:p-0 print:m-0">
-                
-                {/* Print Header */}
-                <div className="hidden print:block mb-8 text-center border-b pb-4">
-                    <div className="text-2xl font-bold text-black mb-1">Fiscal de Venda - Relatório de Auditoria</div>
-                    <p className="text-sm text-gray-500">Gerado em {new Date().toLocaleDateString()}</p>
-                </div>
-
-                {/* 1. EXECUTIVE SUMMARY */}
-                <section className="glass-card p-0 rounded-3xl overflow-hidden print:border print:border-gray-200 print:bg-white print:shadow-none">
-                    <div className="p-8 border-b border-white/5 print:border-gray-200">
-                        <div className="flex flex-col md:flex-row gap-8 items-center">
-                            {/* Score Circle with Animation */}
-                            <div className={`relative w-32 h-32 rounded-full border-4 flex flex-col items-center justify-center shrink-0 ${getScoreColor(result.resumo_executivo.score)}`}>
-                                <div className="absolute inset-0 rounded-full animate-pulse opacity-20 bg-current print:hidden"></div>
-                                <span className={`text-4xl font-bold ${getScoreColor(result.resumo_executivo.score).split(' ')[0]}`}>{result.resumo_executivo.score}</span>
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Score</span>
-                            </div>
-                            
-                            <div className="flex-1 text-center md:text-left">
-                                <div className="inline-block px-3 py-1 rounded-full bg-white/5 text-xs font-bold uppercase mb-3 print:border print:border-gray-300">
-                                    {result.resumo_executivo.classificacao}
-                                </div>
-                                <h2 className="text-2xl font-bold text-white mb-2 print:text-black">"{result.resumo_executivo.veredicto}"</h2>
-                                
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                                    <div className="bg-white/5 rounded-xl p-3 text-center print:bg-gray-100">
-                                        <div className="text-xs text-text-muted mb-1">Total Msgs</div>
-                                        <div className="font-bold text-white print:text-black">{result.resumo_executivo.estatisticas.total_mensagens}</div>
-                                    </div>
-                                    <div className="bg-white/5 rounded-xl p-3 text-center print:bg-gray-100">
-                                        <div className="text-xs text-text-muted mb-1">Tempo Médio</div>
-                                        <div className="font-bold text-white print:text-black">{result.resumo_executivo.estatisticas.tempo_medio_resposta || "N/A"}</div>
-                                    </div>
-                                    <div className="bg-white/5 rounded-xl p-3 text-center print:bg-gray-100">
-                                        <div className="text-xs text-text-muted mb-1">Erros</div>
-                                        <div className="font-bold text-red-400">{result.resumo_executivo.estatisticas.total_erros}</div>
-                                    </div>
-                                    <div className="bg-white/5 rounded-xl p-3 text-center print:bg-gray-100">
-                                        <div className="text-xs text-text-muted mb-1">Recuperação</div>
-                                        <div className="font-bold text-brand-primary">{result.resumo_executivo.estatisticas.chance_recuperacao}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* 2. METRICS WITH TOOLTIPS */}
-                <section className="glass-card p-8 rounded-3xl bg-bg-elevated print:border print:border-gray-200 print:bg-white print:break-inside-avoid">
-                     <h3 className="text-lg font-bold text-white mb-6 print:text-black">Métricas Detalhadas</h3>
-                     <div className="grid md:grid-cols-2 gap-x-12 gap-y-8">
-                         {Object.entries(result.metricas).map(([key, metric]: [string, any]) => {
-                             if (key === 'tempo_resposta') return null; 
-                             return (
-                                <div key={key}>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <div className="flex items-center">
-                                            <span className="capitalize text-sm font-bold text-white print:text-black">{key.replace('_', ' ')}</span>
-                                            {/* Tooltip added here */}
-                                            <div className="print:hidden">
-                                                <InfoTooltip text={metric.significado || "Análise detalhada desta competência."} />
-                                            </div>
-                                        </div>
-                                        <span className={`font-mono text-sm font-bold ${metric.nota >= 70 ? 'text-brand-primary' : metric.nota >= 40 ? 'text-yellow-500' : 'text-red-500'}`}>{metric.nota}/100</span>
-                                    </div>
-                                    <div className="h-2 bg-white/5 rounded-full overflow-hidden mb-2 print:bg-gray-200">
-                                        <div className={`h-full rounded-full transition-all duration-1000 ease-out ${metric.nota >= 70 ? 'bg-brand-primary' : metric.nota >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${metric.nota}%`}}></div>
-                                    </div>
-                                    <p className="text-xs text-text-muted print:text-gray-600 leading-snug">{metric.problema}</p>
-                                </div>
-                             )
-                         })}
-                     </div>
-                </section>
-
-                {/* 3. TIMELINE & COPY BUTTONS */}
-                <section className="glass-card p-8 rounded-3xl bg-bg-elevated print:border print:border-gray-200 print:bg-white print:break-inside-avoid">
-                    <div className="flex items-center gap-2 mb-8">
-                        <Icons.Clock className="text-brand-primary w-5 h-5" />
-                        <h3 className="text-lg font-bold text-white print:text-black">Timeline da Conversa</h3>
-                    </div>
-
-                    <div className="relative border-l-2 border-white/10 ml-3 space-y-8 print:border-gray-300">
-                        {result.timeline.mensagens.map((msg, idx) => (
-                            <div key={idx} className="relative pl-8">
-                                {/* Dot */}
-                                <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-bg-elevated ${
-                                    msg.status === 'bom' ? 'bg-brand-primary' : 
-                                    msg.status === 'atencao' ? 'bg-yellow-500' : 'bg-red-500'
-                                }`}></div>
-                                
-                                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                                    <div className="flex-1 group">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-bold text-white text-sm print:text-black">{msg.timestamp || `Msg #${msg.numero}`}</span>
-                                            <span className="text-xs text-text-muted">• {msg.autor}</span>
-                                            {msg.tempo_resposta && <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-text-secondary">⏱️ {msg.tempo_resposta}</span>}
-                                        </div>
-                                        <div className={`relative p-3 rounded-lg text-sm border ${
-                                            msg.autor === 'Vendedor' ? 'bg-white/5 border-white/10 rounded-tl-none' : 'bg-brand-primary/10 border-brand-primary/20 rounded-tr-none'
-                                        } print:bg-gray-50 print:border-gray-200 print:text-black hover:bg-white/10 transition-colors`}>
-                                            "{msg.texto}"
-                                            {/* Copy Button for each message */}
-                                            <button 
-                                                onClick={() => handleCopy(msg.texto, `msg-${idx}`)}
-                                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-black/50 rounded text-white print:hidden hover:bg-black/80"
-                                                title="Copiar texto"
-                                            >
-                                                {copiedId === `msg-${idx}` ? <Icons.Check className="w-3 h-3 text-brand-primary" /> : <Icons.Copy className="w-3 h-3" />}
-                                            </button>
-                                        </div>
-                                        {msg.analise && (
-                                            <p className={`mt-2 text-xs ${
-                                                msg.status === 'erro' ? 'text-red-400' : 'text-text-muted'
-                                            } print:text-gray-600`}>
-                                                {msg.status === 'erro' ? '❌ ' : 'ℹ️ '} {msg.analise}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-
-                {/* 4. RECOVERY PLAN */}
-                <section className="glass-card p-8 rounded-3xl bg-bg-elevated border-2 border-blue-500/20 print:border-blue-200 print:bg-white print:break-inside-avoid">
-                     <div className="flex items-center justify-between mb-8">
-                         <div className="flex items-center gap-2">
-                             <Icons.TrendingUp className="text-blue-500 w-5 h-5" />
-                             <h3 className="text-lg font-bold text-white print:text-black">Plano de Recuperação</h3>
-                         </div>
-                         <div className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-xs font-bold border border-blue-500/20 print:bg-blue-50 print:text-blue-800">
-                             Chance: {result.plano_recuperacao.chance}
-                         </div>
-                     </div>
-                     
-                     <div className="space-y-8">
-                         {result.plano_recuperacao.sequencia.map((step, idx) => (
-                             <div key={idx} className="relative pl-8 border-l-2 border-blue-500/20 print:border-blue-200">
-                                 <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-bg-body border-2 border-blue-500 flex items-center justify-center text-[8px] font-bold text-blue-500">
-                                     {idx + 1}
-                                 </div>
-                                 <div className="mb-2">
-                                     <span className="text-blue-400 font-bold text-sm uppercase mr-2 print:text-blue-600">{step.quando_enviar}</span>
-                                     <span className="text-xs text-text-muted print:text-gray-500">({step.aguardar})</span>
-                                 </div>
-                                 <div className="relative group bg-bg-body p-4 rounded-xl border border-white/10 mb-2 print:bg-gray-50 print:border-gray-200 hover:border-blue-500/30 transition-colors">
-                                     <p className="text-white whitespace-pre-line print:text-black">"{step.mensagem}"</p>
-                                     <button 
-                                        onClick={() => handleCopy(step.mensagem, `rec-${idx}`)}
-                                        className="absolute top-2 right-2 p-1.5 bg-white/5 rounded hover:bg-white/10 text-white transition-colors print:hidden"
-                                     >
-                                        {copiedId === `rec-${idx}` ? <Icons.Check className="w-4 h-4 text-brand-primary" /> : <Icons.Copy className="w-4 h-4" />}
-                                     </button>
-                                 </div>
-                                 <p className="text-xs text-text-muted italic print:text-gray-600">Estratégia: {step.estrategia}</p>
-                             </div>
-                         ))}
-                     </div>
-                </section>
-
-                {/* 5. ACTIONS (Hidden on print) */}
-                <section className="grid grid-cols-1 md:grid-cols-3 gap-4 print:hidden">
-                    <button onClick={handleExportPDF} className="p-6 rounded-2xl bg-bg-elevated border border-white/10 hover:border-white/30 transition-all text-left group">
-                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-4 group-hover:bg-brand-primary group-hover:text-black transition-colors">
-                            <Icons.Download className="w-5 h-5" />
-                        </div>
-                        <h4 className="font-bold text-white">Baixar PDF</h4>
-                        <p className="text-xs text-text-muted mt-1">Salvar relatório</p>
-                    </button>
-                    
-                    <button onClick={() => setShowChat(true)} className="p-6 rounded-2xl bg-bg-elevated border border-brand-primary/30 hover:bg-brand-primary/5 transition-all text-left group relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-1 bg-brand-primary text-black text-[10px] font-bold rounded-bl-lg">PRO</div>
-                        <div className="w-10 h-10 rounded-full bg-brand-primary/10 text-brand-primary flex items-center justify-center mb-4 group-hover:bg-brand-primary group-hover:text-black transition-colors">
-                            <Icons.MessageCircle className="w-5 h-5" />
-                        </div>
-                        <h4 className="font-bold text-white">Continuar com IA</h4>
-                        <p className="text-xs text-text-muted mt-1">Tire dúvidas sobre a análise</p>
-                    </button>
-                    
-                    <button onClick={onReset} className="p-6 rounded-2xl bg-bg-elevated border border-white/10 hover:border-white/30 transition-all text-left group">
-                        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-4 group-hover:bg-white group-hover:text-black transition-colors">
-                            <Icons.Upload className="w-5 h-5" />
-                        </div>
-                        <h4 className="font-bold text-white">Nova Auditoria</h4>
-                        <p className="text-xs text-text-muted mt-1">Analise outra conversa</p>
-                    </button>
-                </section>
-
-            </main>
-
-            {/* CHAT MODAL */}
-            {showChat && (
-                <ChatModal 
-                    onClose={() => setShowChat(false)} 
-                    contextAnalysis={result}
-                    userProfile={userProfile}
-                    onDeductCredit={onDeductCredit}
-                    refreshProfile={refreshProfile}
-                />
-            )}
-        </div>
-    );
-};
-
-// Chat Modal Component
-const ChatModal: React.FC<{ 
-    onClose: () => void; 
-    contextAnalysis: AnalysisResult; 
-    userProfile: UserProfile;
-    onDeductCredit: () => void;
-    refreshProfile: () => void;
-}> = ({ onClose, contextAnalysis, userProfile, onDeductCredit, refreshProfile }) => {
-    
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        { role: 'model', text: `Oi! Analisei sua conversa. Posso te ajudar a explicar melhor um erro, criar mais variações de resposta ou simular cenários. O que você precisa?`, timestamp: Date.now() }
-    ]);
-    const [input, setInput] = useState('');
-    const [isTyping, setIsTyping] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    useEffect(scrollToBottom, [messages]);
-
-    const handleSend = async () => {
-        if (!input.trim()) return;
-        
-        if (userProfile.credits <= 0 && userProfile.plan !== 'pro') {
-            alert("Você precisa de créditos para usar o chat. Faça um upgrade!");
-            return;
-        }
-
-        const userMsg: ChatMessage = { role: 'user', text: input, timestamp: Date.now() };
-        setMessages(prev => [...prev, userMsg]);
-        setInput('');
-        setIsTyping(true);
-
-        try {
-            if (userProfile.plan !== 'pro') {
-                onDeductCredit();
-            }
-
-            const responseText = await continueChat(messages, userMsg.text, contextAnalysis);
-            
-            setMessages(prev => [...prev, { role: 'model', text: responseText, timestamp: Date.now() }]);
-        } catch (err) {
-            setMessages(prev => [...prev, { role: 'model', text: "Desculpe, ocorreu um erro. Tente novamente.", timestamp: Date.now() }]);
-        } finally {
-            setIsTyping(false);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative w-full max-w-lg bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl flex flex-col h-[600px] animate-fade-in-up">
-                
-                <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#111] rounded-t-2xl">
-                    <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-brand-primary animate-pulse"></div>
-                        <span className="font-bold text-white">Chat com Fiscal de Venda</span>
-                    </div>
-                    <button onClick={onClose} className="text-text-muted hover:text-white"><Icons.X className="w-5 h-5" /></button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {messages.map((msg, idx) => (
-                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${
-                                msg.role === 'user' 
-                                    ? 'bg-brand-primary text-black rounded-tr-sm' 
-                                    : 'bg-white/10 text-white rounded-tl-sm'
-                            }`}>
-                                <p className="whitespace-pre-line">{msg.text}</p>
-                            </div>
-                        </div>
-                    ))}
-                    {isTyping && (
-                        <div className="flex justify-start">
-                            <div className="bg-white/10 text-white rounded-2xl rounded-tl-sm p-3 flex gap-1 items-center">
-                                <span className="w-1.5 h-1.5 bg-white/50 rounded-full animate-bounce"></span>
-                                <span className="w-1.5 h-1.5 bg-white/50 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></span>
-                                <span className="w-1.5 h-1.5 bg-white/50 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
-                            </div>
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                </div>
-
-                <div className="p-4 border-t border-white/10 bg-[#111] rounded-b-2xl">
-                    <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs text-text-muted">Créditos: {userProfile.credits}</span>
-                        {userProfile.plan === 'pro' && <span className="text-[10px] bg-brand-primary text-black px-1.5 rounded font-bold">PRO</span>}
-                    </div>
-                    <div className="flex gap-2">
-                        <input 
-                            type="text" 
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                            placeholder="Digite sua dúvida..." 
-                            className="flex-1 bg-black border border-white/20 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-brand-primary"
-                        />
-                        <button 
-                            onClick={handleSend}
-                            disabled={isTyping}
-                            className="p-2 bg-brand-primary rounded-xl text-black hover:bg-brand-hover transition-colors disabled:opacity-50"
-                        >
-                            <Icons.ArrowRight className="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
 };

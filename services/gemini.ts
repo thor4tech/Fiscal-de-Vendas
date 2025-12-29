@@ -1,14 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { AnalysisResult, ChatMessage } from "../types";
 
-// Usa a chave definida no vite.config.ts (process.env.API_KEY ou GEMINI_API_KEY)
-const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-
-if (!apiKey) {
-    console.error("CRÍTICO: Gemini API Key não encontrada!");
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey || "dummy_key" });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const SYSTEM_PROMPT = `
 Você é o FISCAL DE VENDA. Analise a conversa do WhatsApp e gere um diagnóstico JSON.
@@ -61,12 +54,12 @@ ESTRUTURA OBRIGATÓRIA DO JSON:
     { "nome": "string", "descricao": "string", "como_aplicar": "string" }
   ],
   "metricas": {
-    "rapport": { "nota": number, "significado": "Rapport", "problema": "string", "como_melhorar": "string" },
-    "escuta_ativa": { "nota": number, "significado": "Escuta", "problema": "string", "como_melhorar": "string" },
-    "tratamento_objecoes": { "nota": number, "significado": "Objeções", "problema": "string", "como_melhorar": "string" },
-    "clareza": { "nota": number, "significado": "Clareza", "problema": "string", "como_melhorar": "string" },
-    "urgencia": { "nota": number, "significado": "Urgência", "problema": "string", "como_melhorar": "string" },
-    "profissionalismo": { "nota": number, "significado": "Profissionalismo", "problema": "string", "como_melhorar": "string" },
+    "rapport": { "nota": number, "significado": "Definição curta do conceito", "problema": "O que foi feito errado", "como_melhorar": "Dica prática" },
+    "escuta_ativa": { "nota": number, "significado": "Definição curta do conceito", "problema": "O que foi feito errado", "como_melhorar": "Dica prática" },
+    "tratamento_objecoes": { "nota": number, "significado": "Definição curta do conceito", "problema": "O que foi feito errado", "como_melhorar": "Dica prática" },
+    "clareza": { "nota": number, "significado": "Definição curta do conceito", "problema": "O que foi feito errado", "como_melhorar": "Dica prática" },
+    "urgencia": { "nota": number, "significado": "Definição curta do conceito", "problema": "O que foi feito errado", "como_melhorar": "Dica prática" },
+    "profissionalismo": { "nota": number, "significado": "Definição curta do conceito", "problema": "O que foi feito errado", "como_melhorar": "Dica prática" },
     "tempo_resposta": { "nota": number, "media": "string", "ideal": "string", "pior": "string", "problema": "string", "como_melhorar": "string" }
   },
   "plano_recuperacao": {
@@ -89,15 +82,17 @@ REGRAS:
 
 export async function analyzeConversation(conversationText: string): Promise<AnalysisResult> {
   try {
-    // Revertendo para gemini-2.0-flash-exp conforme solicitado ("IA anterior")
-    const modelId = 'gemini-2.0-flash-exp';
+    const modelId = 'gemini-3-flash-preview';
     
+    // Aumentado para 500.000 caracteres. Gemini 1.5/3 Flash suporta janelas enormes (1M tokens).
+    // 30.000 era muito pouco para conversas inteiras de WhatsApp em ZIP.
+    const truncatedText = conversationText.slice(0, 500000);
+
     const prompt = `
 ${SYSTEM_PROMPT}
 
 CONVERSA PARA ANÁLISE:
-${conversationText.slice(0, 30000)} 
-(Texto truncado para segurança se for muito longo)
+${truncatedText} 
 
 Analise e retorne APENAS o JSON válido.
 `;
@@ -112,7 +107,6 @@ Analise e retorne APENAS o JSON válido.
     });
 
     const jsonStr = response.text || "{}";
-    // Limpeza extra para garantir JSON válido
     const cleanJson = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
     
     try {
@@ -120,15 +114,25 @@ Analise e retorne APENAS o JSON válido.
         return parsedData;
     } catch (parseError) {
         console.error("Erro ao fazer parse do JSON:", cleanJson);
-        throw new Error("A resposta da IA foi interrompida ou é inválida. Tente uma conversa menor.");
+        throw new Error("A IA processou o arquivo, mas gerou uma resposta inválida. Isso acontece com arquivos muito grandes ou complexos. Tente dividir o arquivo.");
     }
 
   } catch (error: any) {
     console.error("Gemini Analysis Error Completo:", error);
+    
+    let userMessage = "Erro desconhecido na análise.";
+    
     if (error.message?.includes('404')) {
-         throw new Error("Modelo de IA não encontrado. Verifique sua chave de API ou use gemini-1.5-flash.");
+         userMessage = "Modelo de IA não encontrado ou API Key inválida. Verifique suas configurações.";
+    } else if (error.message?.includes('429')) {
+         userMessage = "Muitas requisições ao mesmo tempo. A IA está sobrecarregada. Aguarde 1 minuto e tente novamente.";
+    } else if (error.message?.includes('500') || error.message?.includes('overloaded')) {
+         userMessage = "O servidor da IA instável no momento. Tente novamente em instantes.";
+    } else {
+        userMessage = error.message;
     }
-    throw new Error(`Falha na análise: ${error.message || "Erro desconhecido"}`);
+
+    throw new Error(userMessage);
   }
 }
 
@@ -138,7 +142,7 @@ export async function continueChat(
     contextAnalysis: AnalysisResult | null
 ): Promise<string> {
     try {
-        const modelId = 'gemini-2.0-flash-exp';
+        const modelId = 'gemini-3-flash-preview';
         
         const contextString = contextAnalysis ? `
 CONTEXTO DA AUDITORIA:
