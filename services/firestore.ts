@@ -113,6 +113,7 @@ export const addCredits = async (uid: string, amount: number) => {
         credits: increment(amount)
     };
 
+    // Lógica simples: se comprar muitos créditos, vira PRO (simulação de assinatura ativa)
     if (amount >= 999) {
         updateData.plan = 'pro';
     }
@@ -128,10 +129,13 @@ export const createCheckoutSession = async (uid: string, priceId: string, mode: 
   // A coleção deve ser exata: customers/{uid}/checkout_sessions
   const collectionRef = collection(db, "customers", uid, "checkout_sessions");
   
+  // Identifica qual plano está sendo comprado para passar na URL de retorno
+  const planType = mode === 'subscription' ? 'pro' : 'starter';
+
   // Cria o documento que aciona a Cloud Function da extensão do Stripe
   const docRef = await addDoc(collectionRef, {
     price: priceId,
-    success_url: `${window.location.origin}/?success=true`, // Adiciona flag para toast de sucesso
+    success_url: `${window.location.origin}/?success=true&plan=${planType}`, // Passa o plano na URL para ativação no frontend
     cancel_url: window.location.origin, 
     mode: mode, // 'subscription' para recorrente, 'payment' para único
   });

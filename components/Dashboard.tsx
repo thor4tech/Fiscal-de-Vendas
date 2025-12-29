@@ -775,12 +775,40 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('success') === 'true') {
-        setToast({ message: "Pagamento confirmado! Seu plano está ativo.", type: 'success' });
+        const plan = params.get('plan');
+        const hasProcessed = sessionStorage.getItem('processed_payment'); // Prevent double processing
+
+        if (!hasProcessed) {
+            const processActivation = async () => {
+                try {
+                    if (plan === 'pro') {
+                        // Ativa PRO e dá créditos infinitos (simbólico)
+                        await addCredits(user.uid, 10000); 
+                        setToast({ message: "Assinatura Vendedor Pro ativada com sucesso! 🚀", type: 'success' });
+                    } else {
+                        // Ativa Starter Pack
+                        await addCredits(user.uid, 10);
+                        setToast({ message: "Starter Pack ativado! 10 créditos adicionados.", type: 'success' });
+                    }
+                    sessionStorage.setItem('processed_payment', 'true');
+                    refreshProfile(); // Atualiza a UI imediatamente
+                } catch (error) {
+                    console.error("Erro ao ativar plano:", error);
+                    setToast({ message: "Erro ao ativar plano automaticamente. Contate o suporte.", type: 'error' });
+                }
+            };
+            processActivation();
+        } else {
+             // Se já processou, apenas limpa a URL silenciosamente
+        }
+        
         // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
-        refreshProfile(); // Update credits/plan immediately
+        
+        // Clear flag after a bit so user can buy again later if needed
+        setTimeout(() => sessionStorage.removeItem('processed_payment'), 5000);
     }
-  }, [refreshProfile]);
+  }, [refreshProfile, user.uid]);
 
   // Fetch History (Initial summary load)
   useEffect(() => {
