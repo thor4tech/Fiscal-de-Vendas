@@ -16,6 +16,7 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   timestamp: number;
+  suggestions?: string[]; // Opções rápidas para o usuário responder
 }
 
 // Updated Comprehensive Analysis Result
@@ -24,6 +25,8 @@ export interface AnalysisResult {
     score: number;
     classificacao: "CRÍTICO" | "REGULAR" | "BOM" | "EXCELENTE";
     veredicto: string;
+    tom_de_voz_cliente: string; 
+    tom_de_voz_vendedor: string;
     estatisticas: {
       total_mensagens: number;
       tempo_medio_resposta: string;
@@ -32,6 +35,20 @@ export interface AnalysisResult {
     };
   };
   
+  analise_estrategica: { 
+    metodologia_identificada: string; 
+    metodologia_sugerida: string; 
+    gatilhos_mentais_usados: string[];
+    gatilhos_mentais_negligenciados: string[];
+    principais_barieriras: string[];
+  };
+
+  auditoria_followup: { 
+    status: "EXCESSIVO" | "ADEQUADO" | "INEXISTENTE" | "LENTO";
+    analise: string;
+    oportunidades_perdidas_de_retomada: number;
+  };
+
   timeline: {
     fluxo_emocional: {
       pico_interesse: { mensagem_numero: number; descricao: string };
@@ -56,21 +73,12 @@ export interface AnalysisResult {
     gravidade: "critico" | "medio" | "leve";
     mensagem_numero: number;
     mensagem_original: string;
-    por_que_erro: string;
+    por_que_erro: string; 
+    impacto_na_venda: string; 
     correcao: {
       mensagem_corrigida: string;
       por_que_funciona: string;
     };
-    tecnica_aplicada: {
-      nome: string;
-      descricao: string;
-    };
-  }>;
-  
-  tecnicas_nao_usadas: Array<{
-    nome: string;
-    descricao: string;
-    como_aplicar: string;
   }>;
   
   metricas: {
@@ -80,32 +88,20 @@ export interface AnalysisResult {
     clareza: MetricDetail;
     urgencia: MetricDetail;
     profissionalismo: MetricDetail;
-    tempo_resposta: {
-      nota: number;
-      media: string;
-      ideal: string;
-      pior: string;
-      problema: string;
-      como_melhorar: string;
-    };
+    autoridade: MetricDetail; 
   };
   
-  plano_recuperacao: {
-    chance: "ALTA" | "MÉDIA" | "BAIXA";
-    motivo_chance: string;
-    sequencia: Array<{
-      numero: number;
-      quando_enviar: string;
-      mensagem: string;
-      estrategia: string;
-      aguardar: string;
+  plano_de_acao: { 
+    imediato: {
+      acao: string;
+      script: string;
+      motivo: string;
+    };
+    longo_prazo: Array<{
+      habito: string;
+      como_implementar: string;
     }>;
   };
-  
-  checklist: Array<{
-    categoria: string;
-    itens: string[];
-  }>;
 }
 
 export interface MetricDetail {

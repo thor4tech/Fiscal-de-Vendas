@@ -17,12 +17,14 @@ import {
     Title, 
     Tooltip, 
     Legend, 
-    Filler,
+    Filler, 
     RadialLinearScale 
 } from 'chart.js';
 import { Line, Radar } from 'react-chartjs-2';
 import { History } from './History';
 import { Settings } from './Settings';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // Register ChartJS components
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, RadialLinearScale);
@@ -37,7 +39,7 @@ interface DashboardProps {
 
 // Improved Rich Tooltip Component
 const RichTooltip: React.FC<{ title: string, metric: MetricDetail }> = ({ title, metric }) => (
-    <div className="group relative inline-block ml-2 align-middle z-10 cursor-help">
+    <div className="group relative inline-block ml-2 align-middle z-10 cursor-help print:hidden">
         <Icons.Info className="w-4 h-4 text-text-muted transition-colors group-hover:text-brand-primary" />
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-72 p-0 bg-[#111] border border-white/10 rounded-xl opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 pointer-events-none z-50 shadow-xl backdrop-blur-md overflow-hidden">
             <div className="bg-white/5 px-4 py-2 border-b border-white/5">
@@ -107,10 +109,13 @@ interface ResultViewProps {
 }
 
 const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProfile, onDeductCredit, refreshProfile }) => {
-    const [activeTab, setActiveTab] = useState<'overview' | 'timeline' | 'chat'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'strategy' | 'timeline' | 'action_plan'>('overview');
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const [chatInput, setChatInput] = useState('');
     const [isChatLoading, setIsChatLoading] = useState(false);
+    const [showChatModal, setShowChatModal] = useState(false); // Modal state for chat
+    const [currentSuggestions, setCurrentSuggestions] = useState<string[]>([]);
+    
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -119,21 +124,39 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
 
     useEffect(() => {
         scrollToBottom();
-    }, [chatHistory, isChatLoading]);
+    }, [chatHistory, isChatLoading, showChatModal, currentSuggestions]);
 
-    const handleSendMessage = async () => {
-        if (!chatInput.trim()) return;
+    // Initial Suggestions
+    useEffect(() => {
+        if (showChatModal && chatHistory.length === 0) {
+            const initialSuggestions = [
+                "Como posso melhorar meu Rapport?",
+                "Me dê um script para recuperar essa venda",
+                `Explique o erro "${result.erros[0]?.nome || 'identificado'}"`
+            ];
+            setCurrentSuggestions(initialSuggestions);
+        }
+    }, [showChatModal, result]);
 
-        const newMsg: ChatMessage = { role: 'user', text: chatInput, timestamp: Date.now() };
+    const handleSendMessage = async (text?: string) => {
+        const messageText = text || chatInput;
+        if (!messageText.trim()) return;
+
+        const newMsg: ChatMessage = { role: 'user', text: messageText, timestamp: Date.now() };
         const updatedHistory = [...chatHistory, newMsg];
 
         setChatHistory(updatedHistory);
         setChatInput('');
+        setCurrentSuggestions([]); 
         setIsChatLoading(true);
 
         try {
-            const responseText = await continueChat(updatedHistory, newMsg.text, result);
-            setChatHistory([...updatedHistory, { role: 'model', text: responseText, timestamp: Date.now() }]);
+            const response = await continueChat(updatedHistory, newMsg.text, result);
+            setChatHistory([...updatedHistory, { role: 'model', text: response.text, timestamp: Date.now() }]);
+            
+            if (response.suggestions && response.suggestions.length > 0) {
+                setCurrentSuggestions(response.suggestions);
+            }
         } catch (error) {
             console.error(error);
             setChatHistory([...updatedHistory, { role: 'model', text: "Erro ao processar mensagem. Tente novamente.", timestamp: Date.now() }]);
@@ -143,242 +166,441 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
     };
 
     return (
-        <div className="min-h-screen bg-bg-body text-text-primary p-6">
-            <div className="max-w-6xl mx-auto">
-                <button onClick={onReset} className="mb-6 flex items-center gap-2 text-text-muted hover:text-white transition-colors group">
+        <div className="min-h-screen bg-bg-body text-text-primary p-6 print:bg-white print:text-black print:p-0">
+            {/* Header / Nav - Hidden on Print */}
+            <div className="max-w-6xl mx-auto mb-6 flex justify-between items-center print:hidden">
+                <button onClick={onReset} className="flex items-center gap-2 text-text-muted hover:text-white transition-colors group">
                     <Icons.ArrowRight className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" /> Voltar ao Dashboard
                 </button>
+                <div className="flex gap-3">
+                    <button 
+                        onClick={() => window.print()}
+                        className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-sm font-medium"
+                    >
+                        <Icons.Download className="w-4 h-4" /> Exportar PDF
+                    </button>
+                    <button 
+                        onClick={() => setShowChatModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-black rounded-lg hover:bg-brand-hover transition-colors text-sm font-bold shadow-glow-sm"
+                    >
+                        <Icons.MessageCircle className="w-4 h-4" /> Chat com IA
+                    </button>
+                </div>
+            </div>
 
-                <div className="grid lg:grid-cols-3 gap-8">
-                    {/* Left Column: Summary & Navigation */}
-                    <div className="lg:col-span-1 space-y-6">
-                        <div className="glass-card p-6 rounded-2xl text-center relative overflow-hidden bg-[#111] border border-white/10">
-                            <div className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center border-4 text-4xl font-bold mb-4 shadow-xl ${
-                                result.resumo_executivo.score >= 80 ? 'border-brand-primary text-brand-primary' :
-                                result.resumo_executivo.score >= 50 ? 'border-yellow-500 text-yellow-500' : 'border-red-500 text-red-500'
-                            }`}>
-                                {result.resumo_executivo.score}
-                            </div>
-                            <h2 className={`text-2xl font-bold mb-2 ${
-                                result.resumo_executivo.classificacao === 'CRÍTICO' ? 'text-red-500' : 
-                                result.resumo_executivo.classificacao === 'EXCELENTE' ? 'text-brand-primary' : 'text-white'
-                            }`}>{result.resumo_executivo.classificacao}</h2>
-                            <p className="text-text-secondary text-sm leading-relaxed">{result.resumo_executivo.veredicto}</p>
+            {/* Print Header */}
+            <div className="hidden print:block text-center mb-8 border-b border-gray-200 pb-4">
+                <h1 className="text-3xl font-bold text-black">Relatório de Auditoria de Vendas</h1>
+                <p className="text-gray-500 text-sm mt-1">Gerado por FiscalDeVenda.com.br para {user.displayName}</p>
+                <p className="text-gray-400 text-xs mt-1">{new Date().toLocaleDateString()} • IA Gemini 2.0 Flash</p>
+            </div>
+
+            <div className="max-w-6xl mx-auto grid lg:grid-cols-12 gap-8">
+                
+                {/* --- Left Column: High Level Summary --- */}
+                <div className="lg:col-span-4 space-y-6 print:col-span-12 print:grid print:grid-cols-2 print:gap-6">
+                    {/* Score Card */}
+                    <div className="glass-card p-8 rounded-2xl text-center relative overflow-hidden bg-[#111] border border-white/10 print:border-gray-300 print:bg-white print:shadow-none">
+                        <div className={`w-36 h-36 mx-auto rounded-full flex flex-col items-center justify-center border-4 text-5xl font-bold mb-4 shadow-2xl relative ${
+                            result.resumo_executivo.score >= 80 ? 'border-brand-primary text-brand-primary' :
+                            result.resumo_executivo.score >= 50 ? 'border-yellow-500 text-yellow-500' : 'border-red-500 text-red-500'
+                        }`}>
+                            {result.resumo_executivo.score}
+                            <span className="text-xs font-medium text-text-muted mt-1 print:text-gray-500">SCORE</span>
                         </div>
+                        <h2 className={`text-2xl font-bold mb-2 tracking-tight ${
+                            result.resumo_executivo.classificacao === 'CRÍTICO' ? 'text-red-500' : 
+                            result.resumo_executivo.classificacao === 'EXCELENTE' ? 'text-brand-primary' : 'text-white print:text-black'
+                        }`}>{result.resumo_executivo.classificacao}</h2>
+                        <p className="text-text-secondary text-sm leading-relaxed print:text-gray-700">{result.resumo_executivo.veredicto}</p>
+                    </div>
 
-                        {/* Stats Grid */}
-                         <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                <span className="text-xs text-text-muted block">Erros</span>
-                                <span className="text-lg font-bold text-red-400">{result.resumo_executivo.estatisticas.total_erros}</span>
+                    {/* Vibe Check (New) */}
+                    <div className="glass-card p-6 rounded-2xl border border-white/10 print:border-gray-300 print:bg-white print:shadow-none">
+                        <h3 className="text-sm font-bold text-text-muted uppercase tracking-wider mb-4 print:text-gray-500">Análise de Tom</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="text-white print:text-black">Vendedor</span>
+                                    <span className="text-brand-primary font-medium">{result.resumo_executivo.tom_de_voz_vendedor}</span>
+                                </div>
+                                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden print:bg-gray-200">
+                                    <div className="h-full bg-brand-primary w-3/4"></div>
+                                </div>
                             </div>
-                            <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                <span className="text-xs text-text-muted block">Recuperação</span>
-                                <span className="text-lg font-bold text-brand-primary">{result.resumo_executivo.estatisticas.chance_recuperacao}</span>
+                            <div>
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span className="text-white print:text-black">Cliente</span>
+                                    <span className="text-blue-400 font-medium">{result.resumo_executivo.tom_de_voz_cliente}</span>
+                                </div>
+                                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden print:bg-gray-200">
+                                    <div className="h-full bg-blue-400 w-1/2"></div>
+                                </div>
                             </div>
-                         </div>
-
-                        {/* Tabs */}
-                        <div className="flex flex-col gap-2">
-                            <button onClick={() => setActiveTab('overview')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'overview' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
-                                <Icons.BarChart className="w-5 h-5" /> Visão Geral
-                            </button>
-                            <button onClick={() => setActiveTab('timeline')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'timeline' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
-                                <Icons.Clock className="w-5 h-5" /> Linha do Tempo
-                            </button>
-                            <button onClick={() => setActiveTab('chat')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'chat' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
-                                <Icons.MessageCircle className="w-5 h-5" /> Chat com Fiscal
-                            </button>
                         </div>
                     </div>
 
-                    {/* Right Column: Content */}
-                    <div className="lg:col-span-2">
-                        {activeTab === 'overview' && (
-                            <div className="space-y-6 animate-fade-in">
-                                {/* Errors Section */}
-                                {result.erros.length > 0 && (
-                                    <div className="glass-card p-6 rounded-2xl border-l-4 border-l-red-500 bg-[#1a0505] border border-red-500/20">
-                                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                            <Icons.AlertTriangle className="w-5 h-5 text-red-500" /> Erros Identificados
-                                        </h3>
-                                        <div className="space-y-4">
-                                            {result.erros.map((erro, idx) => (
-                                                <div key={idx} className="bg-red-500/5 p-4 rounded-xl border border-red-500/10">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider border border-red-500/30 px-2 py-0.5 rounded-full">{erro.gravidade}</span>
-                                                        <span className="text-xs text-text-muted">Mensagem #{erro.mensagem_numero}</span>
+                    {/* Quick Stats */}
+                     <div className="grid grid-cols-2 gap-3 print:hidden">
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <span className="text-xs text-text-muted block">Erros</span>
+                            <span className="text-xl font-bold text-red-400">{result.resumo_executivo.estatisticas.total_erros}</span>
+                        </div>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <span className="text-xs text-text-muted block">Recuperação</span>
+                            <span className="text-xl font-bold text-brand-primary">{result.resumo_executivo.estatisticas.chance_recuperacao}</span>
+                        </div>
+                     </div>
+
+                    {/* Navigation Tabs - Hidden on Print */}
+                    <div className="flex flex-col gap-2 print:hidden">
+                        <button onClick={() => setActiveTab('overview')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'overview' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                            <Icons.BarChart className="w-5 h-5" /> Visão Geral & Erros
+                        </button>
+                        <button onClick={() => setActiveTab('strategy')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'strategy' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                            <Icons.Target className="w-5 h-5" /> Estratégia & Follow-up
+                        </button>
+                        <button onClick={() => setActiveTab('action_plan')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'action_plan' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                            <Icons.TrendingUp className="w-5 h-5" /> Plano de Ação Tático
+                        </button>
+                        <button onClick={() => setActiveTab('timeline')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'timeline' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                            <Icons.Clock className="w-5 h-5" /> Linha do Tempo
+                        </button>
+                    </div>
+                </div>
+
+                {/* --- Right Column: Content --- */}
+                <div className="lg:col-span-8 print:col-span-12">
+                    
+                    {/* SECTION: VISÃO GERAL (Errors & Metrics) */}
+                    {(activeTab === 'overview' || typeof window !== 'undefined') && ( 
+                        <div className={`space-y-8 animate-fade-in ${activeTab !== 'overview' ? 'hidden print:block' : ''}`}>
+                            
+                            {/* Critical Errors */}
+                            {result.erros.length > 0 && (
+                                <div className="glass-card p-8 rounded-2xl border-l-4 border-l-red-500 bg-[#1a0505] border border-red-500/20 print:border-gray-300 print:bg-white print:text-black">
+                                    <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3 print:text-black">
+                                        <Icons.AlertTriangle className="w-6 h-6 text-red-500" /> Diagnóstico de Erros
+                                    </h3>
+                                    <div className="space-y-6">
+                                        {result.erros.map((erro, idx) => (
+                                            <div key={idx} className="bg-red-500/5 p-6 rounded-xl border border-red-500/10 print:bg-gray-50 print:border-gray-200">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider border border-red-500/30 px-2 py-1 rounded-full print:text-red-600 print:border-red-200">{erro.tipo}</span>
+                                                    <span className="text-xs text-text-muted print:text-gray-500">Msg #{erro.mensagem_numero}</span>
+                                                </div>
+                                                <p className="text-white font-medium mb-4 italic pl-4 border-l-2 border-red-500/30 print:text-gray-800">"{erro.mensagem_original}"</p>
+                                                
+                                                <div className="grid md:grid-cols-2 gap-4 mb-4">
+                                                    <div>
+                                                        <p className="text-xs font-bold text-red-400 mb-1 uppercase">O Problema (Psicologia)</p>
+                                                        <p className="text-sm text-text-secondary leading-relaxed print:text-gray-700">{erro.por_que_erro}</p>
                                                     </div>
-                                                    <p className="text-white font-medium mb-3 italic">"{erro.mensagem_original}"</p>
-                                                    <p className="text-sm text-red-200 mb-4 bg-red-500/10 p-2 rounded-lg"><strong className="text-red-400">Problema:</strong> {erro.por_que_erro}</p>
-                                                    <div className="bg-[#111] p-4 rounded-lg border border-white/10">
-                                                        <p className="text-xs text-green-400 font-bold mb-1 flex items-center gap-1"><Icons.CheckCircle className="w-3 h-3" /> Sugestão de Correção</p>
-                                                        <p className="text-sm text-white leading-relaxed">{erro.correcao.mensagem_corrigida}</p>
+                                                    <div>
+                                                        <p className="text-xs font-bold text-orange-400 mb-1 uppercase">Impacto na Venda</p>
+                                                        <p className="text-sm text-text-secondary leading-relaxed print:text-gray-700">{erro.impacto_na_venda}</p>
                                                     </div>
                                                 </div>
-                                            ))}
+
+                                                <div className="bg-[#111] p-5 rounded-xl border border-white/10 print:bg-white print:border-brand-primary">
+                                                    <p className="text-xs text-brand-primary font-bold mb-2 flex items-center gap-2 uppercase tracking-wide">
+                                                        <Icons.CheckCircle className="w-4 h-4" /> Como você deveria ter escrito
+                                                    </p>
+                                                    <p className="text-base text-white leading-relaxed font-medium print:text-black">"{erro.correcao.mensagem_corrigida}"</p>
+                                                    <p className="text-xs text-text-muted mt-2 italic print:text-gray-500">Por que funciona: {erro.correcao.por_que_funciona}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Metrics Breakdown */}
+                            <div className="glass-card p-8 rounded-2xl border border-white/10 print:border-gray-300 print:bg-white">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 print:text-black">
+                                    <Icons.Target className="w-5 h-5 text-blue-500" /> Scorecard de Competências
+                                </h3>
+                                <div className="grid sm:grid-cols-2 gap-x-8 gap-y-6">
+                                    {Object.entries(result.metricas).map(([key, value]: [string, any]) => {
+                                        if (key === 'tempo_resposta') return null;
+                                        return (
+                                            <div key={key} className="print:break-inside-avoid">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-bold capitalize text-white print:text-black">{key.replace('_', ' ')}</span>
+                                                        <RichTooltip title={key.replace('_', ' ')} metric={value} />
+                                                    </div>
+                                                    <span className={`text-sm font-bold ${value.nota >= 80 ? 'text-brand-primary' : value.nota >= 50 ? 'text-yellow-500' : 'text-red-500'}`}>
+                                                        {value.nota}/100
+                                                    </span>
+                                                </div>
+                                                <div className="w-full bg-white/10 rounded-full h-2 mb-2 print:bg-gray-200">
+                                                    <div className={`h-2 rounded-full ${value.nota >= 80 ? 'bg-brand-primary' : value.nota >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${value.nota}%` }}></div>
+                                                </div>
+                                                <p className="text-xs text-text-muted print:text-gray-600 leading-snug">{value.problema || value.significado}</p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SECTION: STRATEGY & FOLLOW-UP (New) */}
+                    {(activeTab === 'strategy' || typeof window !== 'undefined') && (
+                        <div className={`space-y-8 animate-fade-in ${activeTab !== 'strategy' ? 'hidden print:block print:mt-8' : ''}`}>
+                            
+                            {/* Macro Strategy Analysis */}
+                            <div className="glass-card p-8 rounded-2xl border border-white/10 bg-bg-elevated print:bg-white print:border-gray-300 print:text-black">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 print:text-black">
+                                    <Icons.Settings className="w-5 h-5 text-purple-500" /> Análise Estratégica (Macro)
+                                </h3>
+                                
+                                <div className="grid md:grid-cols-2 gap-8">
+                                    {/* Methodologies */}
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-white/5 rounded-xl border border-white/5 print:bg-gray-50 print:border-gray-200">
+                                            <p className="text-xs text-text-muted uppercase font-bold mb-1">Metodologia Identificada</p>
+                                            <p className="text-lg font-bold text-white print:text-black">{result.analise_estrategica?.metodologia_identificada || "Não identificada"}</p>
+                                        </div>
+                                        <div className="p-4 bg-brand-primary/10 rounded-xl border border-brand-primary/20 print:bg-green-50 print:border-green-200">
+                                            <p className="text-xs text-brand-primary uppercase font-bold mb-1">Metodologia Sugerida</p>
+                                            <p className="text-lg font-bold text-white print:text-black">{result.analise_estrategica?.metodologia_sugerida || "Venda Consultiva"}</p>
                                         </div>
                                     </div>
-                                )}
 
-                                {/* Metrics Breakdown */}
-                                <div className="glass-card p-6 rounded-2xl border border-white/10">
-                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                        <Icons.Target className="w-5 h-5 text-blue-500" /> Métricas Detalhadas
+                                    {/* Triggers & Barriers */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <p className="text-xs text-red-400 uppercase font-bold mb-2">Barreiras Principais</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {result.analise_estrategica?.principais_barieriras?.map((b, i) => (
+                                                    <span key={i} className="text-xs bg-red-500/10 text-red-300 px-3 py-1 rounded-full border border-red-500/20 print:bg-red-50 print:text-red-700">{b}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-text-muted uppercase font-bold mb-2">Gatilhos Negligenciados</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {result.analise_estrategica?.gatilhos_mentais_negligenciados?.map((g, i) => (
+                                                    <span key={i} className="text-xs bg-white/5 text-text-secondary px-3 py-1 rounded-full border border-white/10 print:bg-gray-100 print:text-gray-600">{g}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Follow-up Audit */}
+                            <div className="glass-card p-8 rounded-2xl border border-white/10 print:bg-white print:border-gray-300">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 print:text-black">
+                                    <Icons.Clock className="w-5 h-5 text-orange-500" /> Auditoria de Follow-up (Cadência)
+                                </h3>
+                                
+                                <div className="flex items-center gap-6 mb-6">
+                                    <div className={`px-4 py-2 rounded-lg font-bold text-sm uppercase tracking-wide border ${
+                                        result.auditoria_followup?.status === 'ADEQUADO' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 
+                                        'bg-orange-500/10 text-orange-500 border-orange-500/20'
+                                    }`}>
+                                        Status: {result.auditoria_followup?.status}
+                                    </div>
+                                    <div className="text-sm text-text-muted print:text-gray-600">
+                                        <strong className="text-white print:text-black">{result.auditoria_followup?.oportunidades_perdidas_de_retomada}</strong> oportunidades de retomada perdidas
+                                    </div>
+                                </div>
+                                <p className="text-sm text-text-secondary leading-relaxed bg-white/5 p-4 rounded-xl border border-white/5 print:bg-gray-50 print:text-gray-700 print:border-gray-200">
+                                    {result.auditoria_followup?.analise}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SECTION: ACTION PLAN (New & Improved) */}
+                    {(activeTab === 'action_plan' || typeof window !== 'undefined') && (
+                        <div className={`space-y-8 animate-fade-in ${activeTab !== 'action_plan' ? 'hidden print:block print:mt-8' : ''}`}>
+                            <div className="glass-card p-8 rounded-2xl border-l-4 border-l-brand-primary bg-[#051a10] border border-brand-primary/20 print:bg-white print:border-gray-300 print:text-black">
+                                <div className="flex items-center justify-between mb-8">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-2 print:text-black">
+                                        <Icons.TrendingUp className="w-6 h-6 text-brand-primary" /> Plano de Ação Tático
                                     </h3>
-                                    <div className="grid sm:grid-cols-2 gap-4">
-                                        {Object.entries(result.metricas).map(([key, value]: [string, any]) => {
-                                            if (key === 'tempo_resposta') return null; // Handle separately if needed
-                                            return (
-                                                <div key={key} className="bg-white/5 p-4 rounded-xl border border-white/5 hover:border-brand-primary/30 transition-colors">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <span className="text-sm font-medium capitalize text-text-secondary">{key.replace('_', ' ')}</span>
-                                                        <span className={`text-sm font-bold ${value.nota >= 80 ? 'text-brand-primary' : value.nota >= 50 ? 'text-yellow-500' : 'text-red-500'}`}>
-                                                            {value.nota}/100
-                                                        </span>
-                                                    </div>
-                                                    <div className="w-full bg-white/10 rounded-full h-1.5 mb-2">
-                                                        <div className={`h-1.5 rounded-full ${value.nota >= 80 ? 'bg-brand-primary' : value.nota >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${value.nota}%` }}></div>
-                                                    </div>
-                                                    <p className="text-xs text-text-muted">{value.problema || value.significado}</p>
-                                                    <div className="mt-2">
-                                                         <RichTooltip title={key.replace('_', ' ')} metric={value} />
-                                                    </div>
+                                    <span className="text-xs bg-brand-primary/20 text-brand-primary px-3 py-1 rounded-full font-bold border border-brand-primary/30 print:bg-green-50 print:text-green-700">PARA EXECUTAR AGORA</span>
+                                </div>
+
+                                {/* Immediate Action */}
+                                <div className="mb-10">
+                                    <h4 className="text-sm font-bold text-text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <Icons.Zap className="w-4 h-4 text-yellow-400" /> Ação Imediata (Salvar esta venda)
+                                    </h4>
+                                    <div className="bg-black/30 p-6 rounded-xl border border-brand-primary/20 relative overflow-hidden group print:bg-gray-50 print:border-gray-200">
+                                        <div className="relative z-10">
+                                            <p className="text-lg text-white font-bold mb-2 print:text-black">{result.plano_de_acao?.imediato?.acao}</p>
+                                            <p className="text-sm text-text-secondary mb-4 print:text-gray-600">{result.plano_de_acao?.imediato?.motivo}</p>
+                                            
+                                            {result.plano_de_acao?.imediato?.script && (
+                                                <div className="bg-[#111] p-4 rounded-lg border border-white/10 print:bg-white print:border-gray-300">
+                                                    <p className="text-xs text-brand-primary font-bold mb-2 uppercase">Script de Resgate</p>
+                                                    <p className="text-white font-mono text-sm print:text-black">"{result.plano_de_acao.imediato.script}"</p>
                                                 </div>
-                                            );
-                                        })}
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Recovery Plan */}
-                                <div className="glass-card p-6 rounded-2xl border-l-4 border-l-brand-primary bg-[#051a10] border border-brand-primary/20">
-                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                        <Icons.TrendingUp className="w-5 h-5 text-brand-primary" /> Plano de Recuperação
-                                    </h3>
-                                    <div className="space-y-6">
-                                        {result.plano_recuperacao.sequencia.map((step, idx) => (
-                                            <div key={idx} className="flex gap-4 relative">
-                                                {idx !== result.plano_recuperacao.sequencia.length - 1 && (
-                                                    <div className="absolute left-[15px] top-8 bottom-[-24px] w-0.5 bg-white/10"></div>
-                                                )}
-                                                <div className="w-8 h-8 rounded-full bg-brand-primary text-black flex items-center justify-center font-bold shrink-0 z-10 shadow-glow-sm">
+                                {/* Long Term Habits */}
+                                <div>
+                                    <h4 className="text-sm font-bold text-text-muted uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <Icons.Target className="w-4 h-4 text-blue-400" /> Para as próximas vendas (Longo Prazo)
+                                    </h4>
+                                    <div className="space-y-4">
+                                        {result.plano_de_acao?.longo_prazo?.map((item, idx) => (
+                                            <div key={idx} className="flex gap-4 items-start p-4 bg-white/5 rounded-xl border border-white/5 print:bg-gray-50 print:border-gray-200">
+                                                <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white shrink-0 mt-0.5 print:bg-gray-300 print:text-black">
                                                     {idx + 1}
                                                 </div>
-                                                <div className="flex-1">
-                                                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                                                        <p className="text-sm text-white font-bold">{step.estrategia}</p>
-                                                        <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-text-muted whitespace-nowrap">Aguardar: {step.aguardar || 'Imediato'}</span>
-                                                    </div>
-                                                    <div className="bg-black/40 p-4 rounded-xl border border-brand-primary/10 mt-2">
-                                                        <p className="text-sm text-brand-primary font-medium italic mb-2">"{step.mensagem}"</p>
-                                                        <p className="text-xs text-text-muted">Enviar: {step.quando_enviar}</p>
-                                                    </div>
+                                                <div>
+                                                    <p className="text-white font-bold mb-1 print:text-black">{item.habito}</p>
+                                                    <p className="text-sm text-text-secondary print:text-gray-600">{item.como_implementar}</p>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        {activeTab === 'timeline' && (
-                            <div className="space-y-6 animate-fade-in pb-10">
-                                <h3 className="text-xl font-bold text-white mb-6">Fluxo da Conversa</h3>
-                                {result.timeline.mensagens.map((msg, idx) => (
-                                    <div key={idx} className={`flex ${msg.autor === 'Vendedor' ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[85%] relative group ${msg.autor === 'Vendedor' ? 'items-end flex flex-col' : 'items-start flex flex-col'}`}>
-                                            <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-md ${
-                                                msg.autor === 'Vendedor' 
-                                                  ? 'bg-brand-primary/10 border border-brand-primary/20 text-white rounded-tr-none' 
-                                                  : 'bg-[#222] border border-white/10 text-gray-200 rounded-tl-none'
-                                            }`}>
-                                                {msg.texto}
-                                            </div>
-                                            
-                                            <div className="flex items-center gap-2 mt-1 px-1">
-                                                <span className="text-[10px] text-text-muted">{msg.timestamp || `#${msg.numero}`}</span>
-                                                {msg.analise && (
-                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                                                        msg.status === 'erro' ? 'bg-red-500/20 text-red-400' :
-                                                        msg.status === 'bom' ? 'bg-green-500/20 text-green-400' :
-                                                        'bg-yellow-500/20 text-yellow-500'
-                                                    }`}>
-                                                        {msg.status === 'erro' ? <Icons.AlertTriangle className="w-3 h-3" /> : 
-                                                         msg.status === 'bom' ? <Icons.CheckCircle className="w-3 h-3" /> : <Icons.Info className="w-3 h-3" />}
-                                                        {msg.analise}
-                                                    </span>
-                                                )}
-                                            </div>
+                    {/* SECTION: TIMELINE (Basic) */}
+                    {(activeTab === 'timeline' || typeof window !== 'undefined') && (
+                        <div className={`space-y-6 animate-fade-in pb-10 ${activeTab !== 'timeline' ? 'hidden print:block print:mt-8' : ''}`}>
+                            <h3 className="text-xl font-bold text-white mb-6 print:text-black">Fluxo da Conversa</h3>
+                            {result.timeline.mensagens.map((msg, idx) => (
+                                <div key={idx} className={`flex ${msg.autor === 'Vendedor' ? 'justify-end' : 'justify-start'} print:break-inside-avoid`}>
+                                    <div className={`max-w-[85%] relative group ${msg.autor === 'Vendedor' ? 'items-end flex flex-col' : 'items-start flex flex-col'}`}>
+                                        <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-md ${
+                                            msg.autor === 'Vendedor' 
+                                                ? 'bg-brand-primary/10 border border-brand-primary/20 text-white rounded-tr-none print:bg-green-50 print:border-green-200 print:text-black' 
+                                                : 'bg-[#222] border border-white/10 text-gray-200 rounded-tl-none print:bg-gray-100 print:border-gray-200 print:text-black'
+                                        }`}>
+                                            {msg.texto}
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-2 mt-1 px-1">
+                                            <span className="text-[10px] text-text-muted print:text-gray-500">{msg.timestamp || `#${msg.numero}`}</span>
+                                            {msg.analise && (
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                                    msg.status === 'erro' ? 'bg-red-500/20 text-red-400 print:text-red-600 print:bg-red-100' :
+                                                    msg.status === 'bom' ? 'bg-green-500/20 text-green-400 print:text-green-600 print:bg-green-100' :
+                                                    'bg-yellow-500/20 text-yellow-500 print:text-yellow-600 print:bg-yellow-100'
+                                                }`}>
+                                                    {msg.status === 'erro' ? <Icons.AlertTriangle className="w-3 h-3" /> : 
+                                                        msg.status === 'bom' ? <Icons.CheckCircle className="w-3 h-3" /> : <Icons.Info className="w-3 h-3" />}
+                                                    {msg.analise}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Chat Modal - Only visible when state is true */}
+            {showChatModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print:hidden">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowChatModal(false)}></div>
+                    <div className="relative w-full max-w-lg bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl flex flex-col h-[650px] animate-fade-in-up overflow-hidden">
+                        
+                        <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#111] rounded-t-2xl z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20">
+                                    <Icons.MessageCircle className="w-4 h-4 text-brand-primary" />
+                                </div>
+                                <div>
+                                    <span className="font-bold text-white block text-sm">Fiscal de Venda IA</span>
+                                    <span className="text-[10px] text-text-muted flex items-center gap-1">
+                                        <span className={`w-1.5 h-1.5 rounded-full bg-green-500`}></span>
+                                        Online
+                                    </span>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowChatModal(false)} className="p-2 rounded-lg hover:bg-white/5 text-text-muted hover:text-white transition-colors">
+                                <Icons.X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-bg-body">
+                            {chatHistory.length === 0 && (
+                                <div className="flex flex-col items-center justify-center h-full text-center p-8 opacity-50">
+                                    <Icons.Sparkles className="w-12 h-12 mb-4 text-brand-primary" />
+                                    <p className="text-text-muted text-sm">"Analisei toda sua conversa. Use as sugestões abaixo ou pergunte algo específico."</p>
+                                </div>
+                            )}
+                            {chatHistory.map((msg, idx) => (
+                                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                                    <div className={`max-w-[90%] p-3.5 rounded-2xl text-sm leading-relaxed shadow-sm markdown-content ${
+                                        msg.role === 'user' 
+                                            ? 'bg-brand-primary text-black rounded-tr-sm' 
+                                            : 'bg-[#1a1a1a] border border-white/5 text-white rounded-tl-sm'
+                                    }`}>
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {msg.text}
+                                        </ReactMarkdown>
+                                    </div>
+                                </div>
+                            ))}
+                            {isChatLoading && (
+                                <div className="flex justify-start animate-fade-in">
+                                     <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1.5 items-center w-fit">
+                                        <span className="w-1.5 h-1.5 bg-text-muted/50 rounded-full animate-bounce"></span>
+                                        <span className="w-1.5 h-1.5 bg-text-muted/50 rounded-full animate-bounce delay-75"></span>
+                                        <span className="w-1.5 h-1.5 bg-text-muted/50 rounded-full animate-bounce delay-150"></span>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={chatEndRef} />
+                        </div>
+
+                        {/* Suggestions / Icebreakers Area */}
+                        {!isChatLoading && currentSuggestions.length > 0 && (
+                            <div className="px-4 pb-2 bg-bg-body flex flex-wrap gap-2">
+                                {currentSuggestions.map((suggestion, idx) => (
+                                    <button 
+                                        key={idx}
+                                        onClick={() => handleSendMessage(suggestion)}
+                                        className="text-xs bg-white/5 border border-white/10 hover:border-brand-primary/50 hover:bg-white/10 text-text-secondary hover:text-white px-3 py-2 rounded-full transition-all animate-fade-in"
+                                        style={{ animationDelay: `${idx * 100}ms` }}
+                                    >
+                                        {suggestion}
+                                    </button>
                                 ))}
                             </div>
                         )}
 
-                        {activeTab === 'chat' && (
-                            <div className="glass-card flex flex-col h-[600px] rounded-2xl overflow-hidden animate-fade-in border border-white/10">
-                                <div className="p-4 border-b border-white/5 bg-white/5 flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-brand-primary/10 flex items-center justify-center">
-                                        <Icons.ShieldCheck className="w-6 h-6 text-brand-primary" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-white">Fiscal de Venda AI</h3>
-                                        <p className="text-xs text-text-muted">Tire dúvidas sobre esta análise</p>
-                                    </div>
-                                </div>
-                                
-                                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0a0a0a]">
-                                    {chatHistory.length === 0 && (
-                                        <div className="flex flex-col items-center justify-center h-full text-center p-8 opacity-50">
-                                            <Icons.MessageCircle className="w-16 h-16 mb-4 text-text-muted" />
-                                            <p className="text-text-muted max-w-xs">Pergunte como melhorar sua abordagem ou peça para reescrever uma mensagem específica.</p>
-                                        </div>
-                                    )}
-                                    {chatHistory.map((msg, idx) => (
-                                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            <div className={`max-w-[80%] p-3 rounded-xl text-sm ${
-                                                msg.role === 'user' ? 'bg-brand-primary text-black font-medium' : 'bg-[#222] text-gray-200 border border-white/10'
-                                            }`}>
-                                                {msg.text}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {isChatLoading && (
-                                        <div className="flex justify-start">
-                                            <div className="bg-[#222] p-4 rounded-xl flex gap-1.5 border border-white/10">
-                                                <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce"></span>
-                                                <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-75"></span>
-                                                <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce delay-150"></span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div ref={chatEndRef} />
-                                </div>
-                                
-                                <div className="p-4 bg-[#111] border-t border-white/10">
-                                    <div className="flex gap-2">
-                                        <input 
-                                            type="text" 
-                                            value={chatInput}
-                                            onChange={(e) => setChatInput(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                                            placeholder="Digite sua mensagem..."
-                                            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all placeholder:text-text-muted"
-                                        />
-                                        <button 
-                                            onClick={handleSendMessage}
-                                            disabled={isChatLoading || !chatInput.trim()}
-                                            className="p-3 bg-brand-primary text-black rounded-xl hover:bg-brand-hover disabled:opacity-50 transition-colors shadow-glow-sm"
-                                        >
-                                            <Icons.ArrowRight className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                </div>
+                        <div className="p-4 border-t border-white/10 bg-[#111] rounded-b-2xl">
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={chatInput}
+                                    onChange={(e) => setChatInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                                    placeholder="Digite sua mensagem..." 
+                                    className="flex-1 bg-black border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all placeholder:text-text-muted text-sm"
+                                    autoFocus
+                                />
+                                <button 
+                                    onClick={() => handleSendMessage()}
+                                    disabled={isChatLoading || !chatInput.trim()}
+                                    className="p-3 bg-brand-primary rounded-xl text-black hover:bg-brand-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-glow-sm"
+                                >
+                                    <Icons.ArrowRight className="w-5 h-5" />
+                                </button>
                             </div>
-                        )}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 };
