@@ -4,6 +4,7 @@ import { User, UserProfile } from '../types';
 import { updateProfile } from 'firebase/auth';
 import { auth, storage } from '../services/firebase';
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { createCheckoutSession } from '../services/firestore';
 
 interface SettingsProps {
   user: User;
@@ -17,6 +18,10 @@ interface SettingsProps {
 
 type SettingsTab = 'profile' | 'subscription' | 'preferences';
 
+// Stripe Price IDs
+const PRICE_STARTER = "price_1SjnY38sPBgjqi0CfiIPc0hK";
+const PRICE_PRO = "price_1SjnXY8sPBgjqi0CWl78VfDb";
+
 export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, toggleTheme, onBack, onSignOut, onBuyCredits }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
   const isPro = userProfile.plan === 'pro';
@@ -26,6 +31,9 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
   const [photoURL, setPhotoURL] = useState(user.photoURL || '');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  
+  // Subscription State
+  const [isSubscribing, setIsSubscribing] = useState(false);
   
   // File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -74,6 +82,20 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
         setSaveMessage("Erro ao atualizar perfil.");
     } finally {
         setIsSaving(false);
+    }
+  };
+
+  const handleSubscribe = async (priceId: string) => {
+    if (!auth.currentUser) return;
+    
+    setIsSubscribing(true);
+    try {
+        const url = await createCheckoutSession(auth.currentUser.uid, priceId);
+        window.location.assign(url);
+    } catch (error: any) {
+        console.error("Erro no checkout:", error);
+        alert(`Erro ao iniciar pagamento: ${error.message}`);
+        setIsSubscribing(false);
     }
   };
 
@@ -212,100 +234,135 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
 
             {/* TAB: SUBSCRIPTION (Exclusive Section) */}
             {activeTab === 'subscription' && (
-                <div className="space-y-6 animate-fade-in">
+                <div className="space-y-8 animate-fade-in">
                     
-                    {/* Current Status */}
-                    <div className="glass-card p-8 rounded-2xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                        
-                        <h2 className="text-xl font-bold text-text-primary mb-6 flex items-center gap-2 relative z-10">
-                            <Icons.CreditCard className="w-5 h-5 text-brand-primary" /> Seu Plano Atual
-                        </h2>
-
-                        <div className="grid md:grid-cols-2 gap-6 relative z-10">
-                            <div className={`p-6 rounded-2xl border ${isPro ? 'bg-brand-primary/10 border-brand-primary/30' : 'bg-bg-body border-white/10'}`}>
-                                <p className="text-text-muted text-xs uppercase font-bold mb-2">Status</p>
-                                <h3 className="text-2xl font-bold text-text-primary capitalize flex items-center gap-2 mb-1">
-                                    {isPro ? (
-                                        <>Vendedor Pro <Icons.Zap className="w-5 h-5 text-yellow-400 fill-current" /></>
-                                    ) : (
-                                        'Plano Grátis'
-                                    )}
+                    {/* Header Status */}
+                    <div className="glass-card p-6 rounded-2xl flex items-center justify-between border border-white/10 bg-[#0a0a0a]">
+                        <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl ${isPro ? 'bg-brand-primary/20 text-brand-primary' : 'bg-white/5 text-text-muted'}`}>
+                                {isPro ? <Icons.Zap className="w-6 h-6 fill-current" /> : <Icons.User className="w-6 h-6" />}
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-white">
+                                    {isPro ? 'Assinatura Vendedor Pro Ativa' : 'Plano Gratuito'}
                                 </h3>
                                 <p className="text-sm text-text-secondary">
-                                    {isPro ? 'Assinatura ativa e renovável.' : 'Funcionalidades limitadas.'}
+                                    {isPro ? 'Você tem acesso ilimitado a todas as ferramentas.' : 'Você está usando a versão limitada.'}
+                                </p>
+                            </div>
+                        </div>
+                        {isPro && (
+                             <div className="px-4 py-1.5 bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold rounded-full uppercase tracking-wider">
+                                Ativo
+                             </div>
+                        )}
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6 items-stretch">
+                        
+                        {/* STARTER PLAN */}
+                        <div className={`relative p-8 rounded-3xl border transition-all duration-300 flex flex-col ${isPro ? 'opacity-50 grayscale border-white/5 bg-[#0a0a0a]' : 'bg-[#0a0a0a] border-white/10 hover:border-white/20 hover:bg-[#111]'}`}>
+                            <div className="mb-6">
+                                <h3 className="text-xl font-bold text-white mb-2">Starter</h3>
+                                <div className="flex items-baseline gap-1">
+                                    <span className="text-3xl font-bold text-white">R$ 29,90</span>
+                                    <span className="text-sm text-text-muted">/mês</span>
+                                </div>
+                                <p className="text-sm text-text-secondary mt-3 leading-relaxed">
+                                    Para quem está começando a auditar conversas e quer melhorar o fechamento.
                                 </p>
                             </div>
 
-                            <div className="p-6 rounded-2xl border border-white/10 bg-bg-body">
-                                <p className="text-text-muted text-xs uppercase font-bold mb-2">Saldo de Créditos</p>
-                                <div className="flex items-baseline gap-2 mb-1">
-                                    <h3 className="text-3xl font-bold text-brand-primary">{userProfile.credits > 9000 ? '∞' : userProfile.credits}</h3>
-                                    <span className="text-sm text-text-muted">disponíveis</span>
-                                </div>
-                                <p className="text-xs text-text-secondary">Use para novas auditorias.</p>
-                            </div>
-                        </div>
-                    </div>
+                            <ul className="space-y-4 mb-8 flex-1">
+                                <li className="flex items-center gap-3 text-sm text-text-secondary">
+                                    <Icons.Check className="w-4 h-4 text-white shrink-0" /> 10 Auditorias por mês
+                                </li>
+                                <li className="flex items-center gap-3 text-sm text-text-secondary">
+                                    <Icons.Check className="w-4 h-4 text-white shrink-0" /> Análise de Prints e Texto
+                                </li>
+                                <li className="flex items-center gap-3 text-sm text-text-secondary">
+                                    <Icons.Check className="w-4 h-4 text-white shrink-0" /> Histórico de 30 dias
+                                </li>
+                            </ul>
 
-                    {/* Store Section */}
-                    <div className="mt-8">
-                        <h3 className="text-lg font-bold text-text-primary mb-6">Comprar Créditos ou Upgrade</h3>
-                        
-                        <div className="grid md:grid-cols-2 gap-6">
-                            {/* Pro Plan Card */}
-                            <div 
-                                onClick={() => onBuyCredits(999)}
-                                className={`group relative border rounded-2xl p-6 cursor-pointer transition-all ${isPro ? 'border-brand-primary/50 bg-brand-primary/5 opacity-50 cursor-default' : 'border-brand-primary bg-gradient-to-br from-brand-primary/10 to-transparent hover:shadow-glow-md hover:-translate-y-1'}`}
+                            <button 
+                                onClick={() => !isPro && handleSubscribe(PRICE_STARTER)}
+                                disabled={isSubscribing || isPro}
+                                className="w-full py-4 rounded-xl border border-white/20 text-white font-bold text-sm hover:bg-white hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
+                                {isPro ? 'Incluso no Pro' : isSubscribing ? 'Processando...' : 'Assinar Starter'}
+                            </button>
+                        </div>
+
+                        {/* PRO PLAN (NEON EFFECT) */}
+                        <div className={`relative group p-[1px] rounded-3xl ${isPro ? '' : 'shadow-[0_0_40px_-10px_rgba(16,185,129,0.3)] hover:shadow-[0_0_60px_-10px_rgba(16,185,129,0.5)] transition-shadow duration-500'}`}>
+                            {/* Neon Border Gradient */}
+                            <div className={`absolute inset-0 rounded-3xl bg-gradient-to-br from-brand-primary via-emerald-500 to-brand-primary opacity-50 ${isPro ? 'opacity-20' : 'animate-border-beam opacity-100'}`}></div>
+                            
+                            <div className="relative h-full bg-[#080f0c] rounded-[23px] p-8 flex flex-col overflow-hidden">
                                 {!isPro && (
-                                    <div className="absolute -top-3 left-6 bg-brand-primary text-black text-[10px] uppercase font-extrabold px-3 py-1 rounded-full shadow-lg">
+                                    <div className="absolute top-4 right-4 bg-brand-primary/20 text-brand-primary border border-brand-primary/30 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                                         Recomendado
                                     </div>
                                 )}
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h4 className="font-bold text-white text-lg flex items-center gap-2">Vendedor Pro <Icons.Zap className="w-4 h-4 text-yellow-400 fill-current" /></h4>
-                                        <p className="text-text-muted text-sm mt-1">Tudo ilimitado</p>
+                                
+                                <div className="mb-6 relative z-10">
+                                    <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                                        Vendedor Pro <Icons.Zap className="w-5 h-5 text-yellow-400 fill-current" />
+                                    </h3>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">R$ 97,90</span>
+                                        <span className="text-sm text-text-muted">/mês</span>
                                     </div>
-                                    <div className="text-right">
-                                        <div className="text-2xl font-bold text-white">R$ 97,90</div>
-                                        <div className="text-xs text-text-muted">/mês</div>
-                                    </div>
+                                    <p className="text-sm text-brand-primary/80 mt-3 leading-relaxed font-medium">
+                                        A ferramenta definitiva para times de alta performance e escala.
+                                    </p>
                                 </div>
-                                <ul className="space-y-3 mb-6">
-                                     <li className="flex items-center gap-3 text-sm text-text-secondary"><Icons.Check className="w-4 h-4 text-brand-primary" /> Auditorias Ilimitadas</li>
-                                     <li className="flex items-center gap-3 text-sm text-text-secondary"><Icons.Check className="w-4 h-4 text-brand-primary" /> Relatórios de Evolução</li>
-                                </ul>
-                                <button disabled={isPro} className="w-full py-3 rounded-xl bg-brand-primary text-black font-bold text-sm hover:bg-brand-hover transition-colors shadow-lg">
-                                    {isPro ? 'Plano Ativo' : 'Assinar Agora'}
-                                </button>
-                            </div>
 
-                            {/* Credit Pack */}
-                            <div 
-                                onClick={() => onBuyCredits(10)}
-                                className="border border-white/10 bg-bg-elevated rounded-2xl p-6 hover:border-white/30 transition-all cursor-pointer hover:-translate-y-1"
-                            >
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h4 className="font-bold text-white text-lg">Pack Avulso</h4>
-                                        <p className="text-text-muted text-sm mt-1">10 Créditos</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-2xl font-bold text-white">R$ 29,90</div>
-                                        <div className="text-xs text-text-muted">Pagamento único</div>
-                                    </div>
-                                </div>
-                                <ul className="space-y-3 mb-6">
-                                     <li className="flex items-center gap-3 text-sm text-text-secondary"><Icons.Check className="w-4 h-4 text-white" /> Sem validade</li>
-                                     <li className="flex items-center gap-3 text-sm text-text-secondary"><Icons.Check className="w-4 h-4 text-white" /> Acesso total aos recursos</li>
+                                <ul className="space-y-4 mb-8 flex-1 relative z-10">
+                                    <li className="flex items-center gap-3 text-sm text-white font-medium">
+                                        <div className="p-1 rounded bg-brand-primary/20"><Icons.Check className="w-3 h-3 text-brand-primary" /></div>
+                                        Auditorias ILIMITADAS
+                                    </li>
+                                    <li className="flex items-center gap-3 text-sm text-white font-medium">
+                                        <div className="p-1 rounded bg-brand-primary/20"><Icons.Check className="w-3 h-3 text-brand-primary" /></div>
+                                        Dashboard de Evolução IA
+                                    </li>
+                                    <li className="flex items-center gap-3 text-sm text-white font-medium">
+                                        <div className="p-1 rounded bg-brand-primary/20"><Icons.Check className="w-3 h-3 text-brand-primary" /></div>
+                                        Upload de Arquivos Pesados
+                                    </li>
+                                    <li className="flex items-center gap-3 text-sm text-white font-medium">
+                                        <div className="p-1 rounded bg-brand-primary/20"><Icons.Check className="w-3 h-3 text-brand-primary" /></div>
+                                        Suporte Prioritário
+                                    </li>
                                 </ul>
-                                <button className="w-full py-3 rounded-xl border border-white/20 text-white font-semibold text-sm hover:bg-white hover:text-black transition-colors">
-                                    Comprar Pacote
+
+                                <button 
+                                    onClick={() => !isPro && handleSubscribe(PRICE_PRO)}
+                                    disabled={isSubscribing || isPro}
+                                    className={`w-full py-4 rounded-xl font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 ${isPro ? 'bg-brand-primary/20 text-brand-primary cursor-default' : 'bg-brand-primary hover:bg-brand-hover text-black hover:scale-[1.02] shadow-brand-primary/20'}`}
+                                >
+                                    {isPro ? (
+                                        <><Icons.CheckCircle className="w-4 h-4" /> Plano Ativo</>
+                                    ) : isSubscribing ? (
+                                        'Redirecionando...'
+                                    ) : (
+                                        'Assinar Pro Agora'
+                                    )}
                                 </button>
+                                
+                                {/* Background Glow */}
+                                <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-brand-primary/10 rounded-full blur-[80px] pointer-events-none"></div>
                             </div>
                         </div>
+
+                    </div>
+                    
+                    <div className="mt-8 text-center">
+                        <p className="text-xs text-text-muted flex items-center justify-center gap-2">
+                            <Icons.ShieldCheck className="w-3 h-3" /> Pagamento seguro via Stripe. Cancele a qualquer momento.
+                        </p>
                     </div>
                 </div>
             )}

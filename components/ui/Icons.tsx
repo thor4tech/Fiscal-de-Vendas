@@ -37,7 +37,13 @@ import {
   MessageCircle,
   Download,
   Clipboard,
-  Info
+  Info,
+  Hexagon,
+  Triangle,
+  Circle,
+  Box,
+  Mail,
+  Lock
 } from 'lucide-react';
 
 export const Icons = {
@@ -79,5 +85,11 @@ export const Icons = {
   MessageCircle,
   Download,
   Clipboard,
-  Info
+  Info,
+  Hexagon,
+  Triangle,
+  Circle,
+  Box,
+  Mail,
+  Lock
 };

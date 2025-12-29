@@ -97,6 +97,11 @@ export interface AnalysisResult {
       script: string;
       motivo: string;
     };
+    rotina_followup: Array<{
+      dia: string; // ex: "Dia 1 (Amanhã)", "Dia 3"
+      acao: string;
+      script: string;
+    }>;
     longo_prazo: Array<{
       habito: string;
       como_implementar: string;

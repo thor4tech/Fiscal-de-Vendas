@@ -1,14 +1,65 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Permite que qualquer usuário autenticado leia/escreva EM SUA PRÓPRIA sub-árvore
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
 
-      // Importante: Regra explícita para a sub-coleção 'audits'
-      match /audits/{auditId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+    // ============================================
+    // STRIPE CUSTOMERS (Firebase Extension)
+    // ============================================
+    match /customers/{uid} {
+      allow read: if isOwner(uid);
+
+      // A extensão Stripe escuta a criação de documentos aqui
+      match /checkout_sessions/{id} {
+        allow read, write: if isOwner(uid);
       }
+      
+      match /subscriptions/{id} {
+        allow read: if isOwner(uid);
+      }
+      
+      match /payments/{id} {
+        allow read: if isOwner(uid);
+      }
+    }
+    
+    // ============================================
+    // PRODUCTS (Leitura Pública)
+    // ============================================
+    match /products/{id} {
+      allow read: if true;
+
+      match /prices/{id} {
+        allow read: if true;
+      }
+
+      match /tax_rates/{id} {
+        allow read: if true;
+      }
+    }
+
+    // ============================================
+    // USERS DATA
+    // ============================================
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      
+      match /audits/{auditId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

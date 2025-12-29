@@ -8,6 +8,11 @@ ATUE COMO: VP de Vendas Sênior e Especialista em Neurovendas.
 SUA MISSÃO: Realizar uma auditoria implacável, detalhada e estratégica de uma conversa de vendas (WhatsApp/Email).
 OBJETIVO: Não apenas apontar erros, mas fornecer um diagnóstico completo de metodologia, psicologia e um plano de ação tático.
 
+OBSERVAÇÃO IMPORTANTE SOBRE MÍDIA:
+O texto fornecido pode conter transcrições automáticas de ÁUDIOS e descrições de IMAGENS no formato:
+"[ARQUIVO TRANSCRITO: nome_do_arquivo] Conteúdo: ..."
+Considere esses conteúdos como parte integrante e fluida da conversa. Se o vendedor mandou um áudio, analise o texto transcrito desse áudio como se fosse a fala dele.
+
 SAÍDA: JSON ESTRITO seguindo a interface abaixo.
 
 --- ESTRUTURA DO JSON ---
@@ -82,13 +87,18 @@ SAÍDA: JSON ESTRITO seguindo a interface abaixo.
   },
   "plano_de_acao": {
     "imediato": {
-      "acao": "A única ação para tentar salvar ESTA venda agora (se possível) ou 'Arquivar lead'",
-      "script": "Script exato para enviar agora (se houver chance)",
-      "motivo": "Por que tentar isso?"
+      "acao": "A única ação para tentar salvar ESTA venda agora. Se a venda já foi perdida, dê um script de reativação.",
+      "script": "Script exato para enviar agora (se houver chance) ou para reativar.",
+      "motivo": "Por que essa abordagem funciona?"
     },
+    "rotina_followup": [
+      { "dia": "Dia 1 (Amanhã)", "acao": "Objetivo do toque (ex: Gerar valor, Lembrar sem cobrar)", "script": "Script exato para WhatsApp" },
+      { "dia": "Dia 3 (Daqui a 72h)", "acao": "Objetivo do toque (ex: Prova social, Case de sucesso)", "script": "Script exato para WhatsApp" },
+      { "dia": "Dia 7 (Ultima tentativa)", "acao": "Objetivo do toque (ex: Break-up message, Retirada da oferta)", "script": "Script exato para WhatsApp" }
+    ],
     "longo_prazo": [
-      { "habito": "Hábito a mudar", "como_implementar": "Exercício prático" },
-      { "habito": "Hábito a mudar", "como_implementar": "Exercício prático" }
+      { "habito": "Hábito estratégico (ex: Definir próximo passo)", "como_implementar": "Exercício prático" },
+      { "habito": "Hábito tático (ex: Parar de mandar áudio longo)", "como_implementar": "Exercício prático" }
     ]
   }
 }
@@ -98,14 +108,49 @@ DIRETRIZES DE ANÁLISE:
 2. Identifique "Bafo de Comissão" (Vendedor desesperado para vender).
 3. Identifique "Monólogo" (Vendedor manda áudios/textos enormes sem perguntas).
 4. Identifique "Preço Nu" (Dar preço sem ancoragem de valor).
-5. Se o cliente parou de responder, analise a ÚLTIMA mensagem do vendedor. Ela estimulava resposta?
-6. Se for um arquivo ZIP/Exportação do WhatsApp, reconstrua a timeline com precisão.
+5. Se houver menção de "arquivos de áudio" no texto, considere que o vendedor pode ter falhado ao não escrever o resumo.
+6. **FOLLOW-UP CRÍTICO**: No 'plano_de_acao', GERE OBRIGATORIAMENTE uma 'rotina_followup' com EXATAMENTE 3 toques futuros: 
+   - Dia 1: Foco em AJUDAR, não cobrar.
+   - Dia 3: Foco em PROVA SOCIAL ou NOVIDADE.
+   - Dia 7: "Break-up" (Desapego profissional).
+   Dê os scripts prontos para copiar e colar.
 7. O "plano_de_acao" deve ser TÁTICO. O usuário quer copiar e colar a solução.
 `;
 
+export async function recognizeMediaContent(base64Data: string, mimeType: string, type: 'audio' | 'image'): Promise<string> {
+    try {
+        // 'gemini-2.0-flash-exp' é robusto para multimodalidade (áudio/imagem)
+        const modelId = 'gemini-2.0-flash-exp'; 
+        
+        const prompt = type === 'audio' 
+            ? "Transcreva este áudio de uma conversa de vendas do WhatsApp. Se for apenas ruído ou silêncio, diga '[Sem conteúdo]'. Se for música ou inaudível, avise. Retorne APENAS a transcrição."
+            : "Descreva o conteúdo desta imagem enviada em uma conversa de vendas. Se for um print de conversa, transcreva o texto. Se for produto, descreva. Retorne APENAS a descrição/transcrição.";
+
+        const response = await ai.models.generateContent({
+            model: modelId,
+            contents: {
+                parts: [
+                    {
+                        inlineData: {
+                            mimeType: mimeType,
+                            data: base64Data
+                        }
+                    },
+                    { text: prompt }
+                ]
+            }
+        });
+
+        return response.text || "[Não foi possível transcrever]";
+    } catch (error) {
+        console.error("Erro na transcrição de mídia:", error);
+        return "[Erro ao processar mídia]";
+    }
+}
+
 export async function analyzeConversation(conversationText: string): Promise<AnalysisResult> {
   try {
-    const modelId = 'gemini-3-flash-preview';
+    const modelId = 'gemini-2.0-flash-exp'; // Usando 2.0 Flash para análise de texto complexa e rápida
     
     // Aumentado para 500.000 caracteres.
     const truncatedText = conversationText.slice(0, 500000);
@@ -175,6 +220,7 @@ Metodologia Identificada: ${contextAnalysis.analise_estrategica?.metodologia_ide
 Metodologia Sugerida: ${contextAnalysis.analise_estrategica?.metodologia_sugerida}
 Erros Críticos: ${contextAnalysis.erros.map(e => e.nome).join(', ')}
 Plano Imediato: ${contextAnalysis.plano_de_acao?.imediato?.acao}
+Script Sugerido: ${contextAnalysis.plano_de_acao?.imediato?.script}
 ` : "";
 
         const chat = ai.chats.create({

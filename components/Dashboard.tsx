@@ -14,20 +14,21 @@ import {
     LinearScale, 
     PointElement, 
     LineElement, 
+    BarElement,
     Title, 
     Tooltip, 
     Legend, 
     Filler, 
     RadialLinearScale 
 } from 'chart.js';
-import { Line, Radar } from 'react-chartjs-2';
+import { Line, Radar, Bar, Scatter } from 'react-chartjs-2';
 import { History } from './History';
 import { Settings } from './Settings';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 // Register ChartJS components
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, RadialLinearScale);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler, RadialLinearScale);
 
 interface DashboardProps {
   user: User;
@@ -38,7 +39,7 @@ interface DashboardProps {
 }
 
 // Improved Rich Tooltip Component
-const RichTooltip: React.FC<{ title: string, metric: MetricDetail }> = ({ title, metric }) => (
+const RichTooltip: React.FC<{ title: string, metric?: MetricDetail, content?: { what: string, impact: string, avoid: string } }> = ({ title, metric, content }) => (
     <div className="group relative inline-block ml-2 align-middle z-10 cursor-help print:hidden">
         <Icons.Info className="w-4 h-4 text-text-muted transition-colors group-hover:text-brand-primary" />
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-72 p-0 bg-[#111] border border-white/10 rounded-xl opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 pointer-events-none z-50 shadow-xl backdrop-blur-md overflow-hidden">
@@ -46,19 +47,93 @@ const RichTooltip: React.FC<{ title: string, metric: MetricDetail }> = ({ title,
                 <span className="text-xs font-bold text-white uppercase tracking-wider">{title}</span>
             </div>
             <div className="p-4 space-y-3">
-                <div>
-                    <p className="text-[10px] text-text-muted uppercase font-bold mb-1">O que é</p>
-                    <p className="text-xs text-text-secondary leading-relaxed">{metric.significado || "Avaliação da competência na venda."}</p>
-                </div>
-                <div>
-                    <p className="text-[10px] text-brand-primary uppercase font-bold mb-1">Como Melhorar</p>
-                    <p className="text-xs text-white font-medium leading-relaxed">{metric.como_melhorar || "Pratique mais esta técnica."}</p>
-                </div>
+                {metric ? (
+                    <>
+                        <div>
+                            <p className="text-[10px] text-text-muted uppercase font-bold mb-1">O que é</p>
+                            <p className="text-xs text-text-secondary leading-relaxed">{metric.significado || "Avaliação da competência na venda."}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-brand-primary uppercase font-bold mb-1">Como Melhorar</p>
+                            <p className="text-xs text-white font-medium leading-relaxed">{metric.como_melhorar || "Pratique mais esta técnica."}</p>
+                        </div>
+                    </>
+                ) : content ? (
+                    <>
+                        <div>
+                            <p className="text-[10px] text-text-muted uppercase font-bold mb-1">O Erro</p>
+                            <p className="text-xs text-text-secondary leading-relaxed">{content.what}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-red-400 uppercase font-bold mb-1">Impacto</p>
+                            <p className="text-xs text-white font-medium leading-relaxed">{content.impact}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-brand-primary uppercase font-bold mb-1">Como Evitar</p>
+                            <p className="text-xs text-white font-medium leading-relaxed">{content.avoid}</p>
+                        </div>
+                    </>
+                ) : null}
             </div>
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#111]"></div>
         </div>
     </div>
 );
+
+// Tutorial Modal Component
+const TutorialModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    return (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 animate-fade-in">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose}></div>
+            <div className="relative w-full max-w-2xl bg-[#111] border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl animate-fade-in-up overflow-hidden max-h-[90vh] overflow-y-auto">
+                <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition-colors text-text-muted hover:text-white">
+                    <Icons.X className="w-5 h-5" />
+                </button>
+                
+                <h3 className="text-xl md:text-2xl font-bold text-white mb-2 flex items-center gap-2">
+                    <Icons.Upload className="w-6 h-6 text-brand-primary" /> Como exportar sua conversa
+                </h3>
+                <p className="text-text-secondary mb-8 text-sm md:text-base">Siga o passo a passo no seu celular para extrair o histórico do WhatsApp.</p>
+
+                <div className="grid md:grid-cols-2 gap-6 md:gap-8">
+                    {/* Android */}
+                    <div className="bg-white/5 rounded-2xl p-6 border border-white/5 relative group hover:border-brand-primary/30 transition-colors">
+                        <div className="absolute -top-3 left-6 bg-[#222] px-3 py-1 rounded-full border border-white/10 text-xs font-bold text-green-400 uppercase tracking-wider">
+                            Android
+                        </div>
+                        <ol className="space-y-4 text-sm text-gray-300 mt-2 list-decimal pl-4 marker:text-green-500 marker:font-bold">
+                            <li>Abra a conversa no WhatsApp.</li>
+                            <li>Toque nos <strong>3 pontos (⋮)</strong> no canto superior direito.</li>
+                            <li>Selecione <strong>Mais</strong> &gt; <strong>Exportar conversa</strong>.</li>
+                            <li>Escolha <strong>"Anexar mídia"</strong> (para analisarmos áudios).</li>
+                            <li>Envie o arquivo ZIP para você mesmo ou salve no celular.</li>
+                        </ol>
+                    </div>
+
+                    {/* iPhone */}
+                    <div className="bg-white/5 rounded-2xl p-6 border border-white/5 relative group hover:border-brand-primary/30 transition-colors">
+                        <div className="absolute -top-3 left-6 bg-[#222] px-3 py-1 rounded-full border border-white/10 text-xs font-bold text-blue-400 uppercase tracking-wider">
+                            iPhone (iOS)
+                        </div>
+                        <ol className="space-y-4 text-sm text-gray-300 mt-2 list-decimal pl-4 marker:text-blue-500 marker:font-bold">
+                            <li>Abra a conversa no WhatsApp.</li>
+                            <li>Toque no <strong>Nome do contato</strong> no topo da tela.</li>
+                            <li>Role até o final e toque em <strong>Exportar conversa</strong>.</li>
+                            <li>Selecione <strong>"Anexar Mídia"</strong> (para áudios e imagens).</li>
+                            <li>Salve em "Arquivos" ou envie para seu computador.</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-white/10 text-center">
+                    <button onClick={onClose} className="px-8 py-3 bg-brand-primary text-black font-bold rounded-xl hover:bg-brand-hover transition-colors shadow-glow-sm w-full md:w-auto">
+                        Entendi, vou fazer o upload
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // Centralized Error Modal
 const ErrorModal: React.FC<{ message: string; onClose: () => void }> = ({ message, onClose }) => {
@@ -69,7 +144,7 @@ const ErrorModal: React.FC<{ message: string; onClose: () => void }> = ({ messag
                 <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6 border border-red-500/20">
                     <Icons.AlertTriangle className="w-8 h-8 text-red-500" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Falha na Análise</h3>
+                <h3 className="text-xl font-bold text-white mb-2">Ops! Algo deu errado</h3>
                 <p className="text-text-secondary text-sm mb-8 leading-relaxed">
                     {message}
                 </p>
@@ -166,22 +241,22 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
     };
 
     return (
-        <div className="min-h-screen bg-bg-body text-text-primary p-6 print:bg-white print:text-black print:p-0">
+        <div className="min-h-screen bg-bg-body text-text-primary p-4 md:p-6 print:bg-white print:text-black print:p-0">
             {/* Header / Nav - Hidden on Print */}
-            <div className="max-w-6xl mx-auto mb-6 flex justify-between items-center print:hidden">
+            <div className="max-w-6xl mx-auto mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
                 <button onClick={onReset} className="flex items-center gap-2 text-text-muted hover:text-white transition-colors group">
                     <Icons.ArrowRight className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" /> Voltar ao Dashboard
                 </button>
-                <div className="flex gap-3">
+                <div className="flex gap-3 w-full md:w-auto">
                     <button 
                         onClick={() => window.print()}
-                        className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-sm font-medium"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-sm font-medium"
                     >
                         <Icons.Download className="w-4 h-4" /> Exportar PDF
                     </button>
                     <button 
                         onClick={() => setShowChatModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-black rounded-lg hover:bg-brand-hover transition-colors text-sm font-bold shadow-glow-sm"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-brand-primary text-black rounded-lg hover:bg-brand-hover transition-colors text-sm font-bold shadow-glow-sm"
                     >
                         <Icons.MessageCircle className="w-4 h-4" /> Chat com IA
                     </button>
@@ -195,18 +270,18 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                 <p className="text-gray-400 text-xs mt-1">{new Date().toLocaleDateString()} • IA Gemini 2.0 Flash</p>
             </div>
 
-            <div className="max-w-6xl mx-auto grid lg:grid-cols-12 gap-8">
+            <div className="max-w-6xl mx-auto flex flex-col lg:grid lg:grid-cols-12 gap-8">
                 
                 {/* --- Left Column: High Level Summary --- */}
-                <div className="lg:col-span-4 space-y-6 print:col-span-12 print:grid print:grid-cols-2 print:gap-6">
+                <div className="lg:col-span-4 space-y-6 print:col-span-12 print:grid print:grid-cols-2 print:gap-6 order-1">
                     {/* Score Card */}
-                    <div className="glass-card p-8 rounded-2xl text-center relative overflow-hidden bg-[#111] border border-white/10 print:border-gray-300 print:bg-white print:shadow-none">
-                        <div className={`w-36 h-36 mx-auto rounded-full flex flex-col items-center justify-center border-4 text-5xl font-bold mb-4 shadow-2xl relative ${
+                    <div className="glass-card p-6 md:p-8 rounded-2xl text-center relative overflow-hidden bg-[#111] border border-white/10 print:border-gray-300 print:bg-white print:shadow-none">
+                        <div className={`w-28 h-28 md:w-36 md:h-36 mx-auto rounded-full flex flex-col items-center justify-center border-4 text-4xl md:text-5xl font-bold mb-4 shadow-2xl relative ${
                             result.resumo_executivo.score >= 80 ? 'border-brand-primary text-brand-primary' :
                             result.resumo_executivo.score >= 50 ? 'border-yellow-500 text-yellow-500' : 'border-red-500 text-red-500'
                         }`}>
                             {result.resumo_executivo.score}
-                            <span className="text-xs font-medium text-text-muted mt-1 print:text-gray-500">SCORE</span>
+                            <span className="text-[10px] md:text-xs font-medium text-text-muted mt-1 print:text-gray-500">SCORE</span>
                         </div>
                         <h2 className={`text-2xl font-bold mb-2 tracking-tight ${
                             result.resumo_executivo.classificacao === 'CRÍTICO' ? 'text-red-500' : 
@@ -214,6 +289,18 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                         }`}>{result.resumo_executivo.classificacao}</h2>
                         <p className="text-text-secondary text-sm leading-relaxed print:text-gray-700">{result.resumo_executivo.veredicto}</p>
                     </div>
+
+                    {/* Quick Stats (Mobile optimized grid) */}
+                     <div className="grid grid-cols-2 gap-3 print:hidden">
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <span className="text-xs text-text-muted block">Erros</span>
+                            <span className="text-xl font-bold text-red-400">{result.resumo_executivo.estatisticas.total_erros}</span>
+                        </div>
+                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                            <span className="text-xs text-text-muted block">Recuperação</span>
+                            <span className="text-xl font-bold text-brand-primary">{result.resumo_executivo.estatisticas.chance_recuperacao}</span>
+                        </div>
+                     </div>
 
                     {/* Vibe Check (New) */}
                     <div className="glass-card p-6 rounded-2xl border border-white/10 print:border-gray-300 print:bg-white print:shadow-none">
@@ -240,37 +327,27 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                         </div>
                     </div>
 
-                    {/* Quick Stats */}
-                     <div className="grid grid-cols-2 gap-3 print:hidden">
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                            <span className="text-xs text-text-muted block">Erros</span>
-                            <span className="text-xl font-bold text-red-400">{result.resumo_executivo.estatisticas.total_erros}</span>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                            <span className="text-xs text-text-muted block">Recuperação</span>
-                            <span className="text-xl font-bold text-brand-primary">{result.resumo_executivo.estatisticas.chance_recuperacao}</span>
-                        </div>
-                     </div>
-
-                    {/* Navigation Tabs - Hidden on Print */}
-                    <div className="flex flex-col gap-2 print:hidden">
-                        <button onClick={() => setActiveTab('overview')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'overview' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
-                            <Icons.BarChart className="w-5 h-5" /> Visão Geral & Erros
+                    {/* Navigation Tabs - Hidden on Print - Mobile Optimized Scroll */}
+                    <div className="flex lg:flex-col gap-2 print:hidden overflow-x-auto pb-2 lg:pb-0 scrollbar-hide snap-x relative">
+                        <button onClick={() => setActiveTab('overview')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 min-w-[200px] lg:min-w-0 snap-center whitespace-nowrap ${activeTab === 'overview' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                            <Icons.BarChart className="w-5 h-5 flex-shrink-0" /> Visão Geral & Erros
                         </button>
-                        <button onClick={() => setActiveTab('strategy')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'strategy' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
-                            <Icons.Target className="w-5 h-5" /> Estratégia & Follow-up
+                        <button onClick={() => setActiveTab('strategy')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 min-w-[200px] lg:min-w-0 snap-center whitespace-nowrap ${activeTab === 'strategy' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                            <Icons.Target className="w-5 h-5 flex-shrink-0" /> Estratégia & Follow-up
                         </button>
-                        <button onClick={() => setActiveTab('action_plan')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'action_plan' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
-                            <Icons.TrendingUp className="w-5 h-5" /> Plano de Ação Tático
+                        <button onClick={() => setActiveTab('action_plan')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 min-w-[200px] lg:min-w-0 snap-center whitespace-nowrap ${activeTab === 'action_plan' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                            <Icons.TrendingUp className="w-5 h-5 flex-shrink-0" /> Plano de Ação Tático
                         </button>
-                        <button onClick={() => setActiveTab('timeline')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 ${activeTab === 'timeline' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
-                            <Icons.Clock className="w-5 h-5" /> Linha do Tempo
+                        <button onClick={() => setActiveTab('timeline')} className={`p-4 rounded-xl text-left font-medium transition-colors border flex items-center gap-3 min-w-[200px] lg:min-w-0 snap-center whitespace-nowrap ${activeTab === 'timeline' ? 'bg-white/10 border-brand-primary text-white shadow-glow-sm' : 'bg-transparent border-transparent text-text-muted hover:bg-white/5'}`}>
+                            <Icons.Clock className="w-5 h-5 flex-shrink-0" /> Linha do Tempo
                         </button>
+                        {/* Fade overlay for scroll indication on mobile */}
+                        <div className="lg:hidden absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-bg-body to-transparent pointer-events-none"></div>
                     </div>
                 </div>
 
                 {/* --- Right Column: Content --- */}
-                <div className="lg:col-span-8 print:col-span-12">
+                <div className="lg:col-span-8 print:col-span-12 order-2">
                     
                     {/* SECTION: VISÃO GERAL (Errors & Metrics) */}
                     {(activeTab === 'overview' || typeof window !== 'undefined') && ( 
@@ -278,15 +355,25 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                             
                             {/* Critical Errors */}
                             {result.erros.length > 0 && (
-                                <div className="glass-card p-8 rounded-2xl border-l-4 border-l-red-500 bg-[#1a0505] border border-red-500/20 print:border-gray-300 print:bg-white print:text-black">
-                                    <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3 print:text-black">
+                                <div className="glass-card p-6 md:p-8 rounded-2xl border-l-4 border-l-red-500 bg-[#1a0505] border border-red-500/20 print:border-gray-300 print:bg-white print:text-black">
+                                    <h3 className="text-xl md:text-2xl font-bold text-white mb-6 flex items-center gap-3 print:text-black">
                                         <Icons.AlertTriangle className="w-6 h-6 text-red-500" /> Diagnóstico de Erros
                                     </h3>
                                     <div className="space-y-6">
                                         {result.erros.map((erro, idx) => (
-                                            <div key={idx} className="bg-red-500/5 p-6 rounded-xl border border-red-500/10 print:bg-gray-50 print:border-gray-200">
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <span className="text-xs font-bold text-red-400 uppercase tracking-wider border border-red-500/30 px-2 py-1 rounded-full print:text-red-600 print:border-red-200">{erro.tipo}</span>
+                                            <div key={idx} className="bg-red-500/5 p-4 md:p-6 rounded-xl border border-red-500/10 print:bg-gray-50 print:border-gray-200">
+                                                <div className="flex flex-col sm:flex-row sm:justify-between items-start mb-3 gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-bold text-red-400 uppercase tracking-wider border border-red-500/30 px-2 py-1 rounded-full print:text-red-600 print:border-red-200">{erro.tipo}</span>
+                                                        <RichTooltip 
+                                                            title={erro.nome} 
+                                                            content={{
+                                                                what: erro.por_que_erro,
+                                                                impact: erro.impacto_na_venda,
+                                                                avoid: "Use perguntas abertas antes de apresentar soluções." // Genérico como fallback, mas ideal vir da IA
+                                                            }}
+                                                        />
+                                                    </div>
                                                     <span className="text-xs text-text-muted print:text-gray-500">Msg #{erro.mensagem_numero}</span>
                                                 </div>
                                                 <p className="text-white font-medium mb-4 italic pl-4 border-l-2 border-red-500/30 print:text-gray-800">"{erro.mensagem_original}"</p>
@@ -316,7 +403,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                             )}
 
                             {/* Metrics Breakdown */}
-                            <div className="glass-card p-8 rounded-2xl border border-white/10 print:border-gray-300 print:bg-white">
+                            <div className="glass-card p-6 md:p-8 rounded-2xl border border-white/10 print:border-gray-300 print:bg-white">
                                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 print:text-black">
                                     <Icons.Target className="w-5 h-5 text-blue-500" /> Scorecard de Competências
                                 </h3>
@@ -351,7 +438,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                         <div className={`space-y-8 animate-fade-in ${activeTab !== 'strategy' ? 'hidden print:block print:mt-8' : ''}`}>
                             
                             {/* Macro Strategy Analysis */}
-                            <div className="glass-card p-8 rounded-2xl border border-white/10 bg-bg-elevated print:bg-white print:border-gray-300 print:text-black">
+                            <div className="glass-card p-6 md:p-8 rounded-2xl border border-white/10 bg-bg-elevated print:bg-white print:border-gray-300 print:text-black">
                                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 print:text-black">
                                     <Icons.Settings className="w-5 h-5 text-purple-500" /> Análise Estratégica (Macro)
                                 </h3>
@@ -392,13 +479,13 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                             </div>
 
                             {/* Follow-up Audit */}
-                            <div className="glass-card p-8 rounded-2xl border border-white/10 print:bg-white print:border-gray-300">
+                            <div className="glass-card p-6 md:p-8 rounded-2xl border border-white/10 print:bg-white print:border-gray-300">
                                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 print:text-black">
                                     <Icons.Clock className="w-5 h-5 text-orange-500" /> Auditoria de Follow-up (Cadência)
                                 </h3>
                                 
-                                <div className="flex items-center gap-6 mb-6">
-                                    <div className={`px-4 py-2 rounded-lg font-bold text-sm uppercase tracking-wide border ${
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 mb-6">
+                                    <div className={`px-4 py-2 rounded-lg font-bold text-sm uppercase tracking-wide border w-fit ${
                                         result.auditoria_followup?.status === 'ADEQUADO' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 
                                         'bg-orange-500/10 text-orange-500 border-orange-500/20'
                                     }`}>
@@ -418,12 +505,12 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                     {/* SECTION: ACTION PLAN (New & Improved) */}
                     {(activeTab === 'action_plan' || typeof window !== 'undefined') && (
                         <div className={`space-y-8 animate-fade-in ${activeTab !== 'action_plan' ? 'hidden print:block print:mt-8' : ''}`}>
-                            <div className="glass-card p-8 rounded-2xl border-l-4 border-l-brand-primary bg-[#051a10] border border-brand-primary/20 print:bg-white print:border-gray-300 print:text-black">
+                            <div className="glass-card p-6 md:p-8 rounded-2xl border-l-4 border-l-brand-primary bg-[#051a10] border border-brand-primary/20 print:bg-white print:border-gray-300 print:text-black">
                                 <div className="flex items-center justify-between mb-8">
                                     <h3 className="text-xl font-bold text-white flex items-center gap-2 print:text-black">
                                         <Icons.TrendingUp className="w-6 h-6 text-brand-primary" /> Plano de Ação Tático
                                     </h3>
-                                    <span className="text-xs bg-brand-primary/20 text-brand-primary px-3 py-1 rounded-full font-bold border border-brand-primary/30 print:bg-green-50 print:text-green-700">PARA EXECUTAR AGORA</span>
+                                    <span className="text-xs bg-brand-primary/20 text-brand-primary px-3 py-1 rounded-full font-bold border border-brand-primary/30 print:bg-green-50 print:text-green-700 hidden sm:block">PARA EXECUTAR AGORA</span>
                                 </div>
 
                                 {/* Immediate Action */}
@@ -438,13 +525,59 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                                             
                                             {result.plano_de_acao?.imediato?.script && (
                                                 <div className="bg-[#111] p-4 rounded-lg border border-white/10 print:bg-white print:border-gray-300">
-                                                    <p className="text-xs text-brand-primary font-bold mb-2 uppercase">Script de Resgate</p>
-                                                    <p className="text-white font-mono text-sm print:text-black">"{result.plano_de_acao.imediato.script}"</p>
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <p className="text-xs text-brand-primary font-bold uppercase">Script de Resgate</p>
+                                                        <button 
+                                                            onClick={() => navigator.clipboard.writeText(result.plano_de_acao.imediato.script)}
+                                                            className="text-xs text-text-muted hover:text-white flex items-center gap-1 transition-colors"
+                                                        >
+                                                            <Icons.Clipboard className="w-3 h-3" /> Copiar
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-white font-mono text-sm print:text-black break-words whitespace-pre-wrap">"{result.plano_de_acao.imediato.script}"</p>
                                                 </div>
                                             )}
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Multi-Day Follow-up Routine (Vertical Timeline) */}
+                                {result.plano_de_acao?.rotina_followup && result.plano_de_acao.rotina_followup.length > 0 && (
+                                    <div className="mb-10">
+                                        <h4 className="text-sm font-bold text-text-muted uppercase tracking-wider mb-6 flex items-center gap-2">
+                                            <Icons.Clock className="w-4 h-4 text-orange-400" /> Rotina de Follow-up (Cadência Próxima)
+                                        </h4>
+                                        <div className="relative pl-2">
+                                            {result.plano_de_acao.rotina_followup.map((step, idx) => (
+                                                <div key={idx} className="relative pl-8 pb-8 last:pb-0">
+                                                    {/* Vertical Line */}
+                                                    {idx !== result.plano_de_acao.rotina_followup.length - 1 && (
+                                                        <div className="absolute left-[11px] top-8 bottom-0 w-0.5 bg-gradient-to-b from-white/20 to-transparent"></div>
+                                                    )}
+                                                    
+                                                    {/* Timeline Dot */}
+                                                    <div className="absolute left-0 top-0 w-6 h-6 rounded-full bg-[#111] border-2 border-brand-primary shadow-[0_0_10px_rgba(16,185,129,0.3)] z-10 flex items-center justify-center">
+                                                        <div className="w-2 h-2 bg-brand-primary rounded-full"></div>
+                                                    </div>
+
+                                                    <div className="bg-white/5 p-5 rounded-xl border border-white/5 hover:border-brand-primary/30 transition-all hover:translate-x-1 duration-300 group">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <span className="text-brand-primary font-bold text-sm uppercase tracking-wide bg-brand-primary/10 px-2 py-0.5 rounded-md border border-brand-primary/20">{step.dia}</span>
+                                                        </div>
+                                                        <p className="text-sm text-white font-medium mb-3">{step.acao}</p>
+                                                        
+                                                        {step.script && (
+                                                            <div className="bg-[#050505] p-3 rounded-lg border border-white/10 text-sm font-mono text-text-secondary break-words relative">
+                                                                <Icons.MessageCircle className="w-3 h-3 absolute top-3 right-3 text-white/20" />
+                                                                "{step.script}"
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Long Term Habits */}
                                 <div>
@@ -453,7 +586,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                                     </h4>
                                     <div className="space-y-4">
                                         {result.plano_de_acao?.longo_prazo?.map((item, idx) => (
-                                            <div key={idx} className="flex gap-4 items-start p-4 bg-white/5 rounded-xl border border-white/5 print:bg-gray-50 print:border-gray-200">
+                                            <div key={idx} className="flex gap-4 items-start p-4 bg-white/5 rounded-xl border border-white/5 print:bg-gray-50 print:border-gray-200 hover:bg-white/10 transition-colors">
                                                 <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white shrink-0 mt-0.5 print:bg-gray-300 print:text-black">
                                                     {idx + 1}
                                                 </div>
@@ -510,9 +643,14 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
             {showChatModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 print:hidden">
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowChatModal(false)}></div>
-                    <div className="relative w-full max-w-lg bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl flex flex-col h-[650px] animate-fade-in-up overflow-hidden">
+                    <div className="relative w-full max-w-lg bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl flex flex-col h-[90vh] md:h-[650px] animate-fade-in-up overflow-hidden">
                         
-                        <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#111] rounded-t-2xl z-10">
+                        <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#111] rounded-t-2xl z-10 relative overflow-hidden">
+                            {isChatLoading && (
+                                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-white/10">
+                                    <div className="h-full bg-brand-primary animate-[shimmer_2s_linear_infinite] bg-[length:50%_100%]"></div>
+                                </div>
+                            )}
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20">
                                     <Icons.MessageCircle className="w-4 h-4 text-brand-primary" />
@@ -520,8 +658,8 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                                 <div>
                                     <span className="font-bold text-white block text-sm">Fiscal de Venda IA</span>
                                     <span className="text-[10px] text-text-muted flex items-center gap-1">
-                                        <span className={`w-1.5 h-1.5 rounded-full bg-green-500`}></span>
-                                        Online
+                                        <span className={`w-1.5 h-1.5 rounded-full ${isChatLoading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></span>
+                                        {isChatLoading ? 'Digitando...' : 'Online'}
                                     </span>
                                 </div>
                             </div>
@@ -553,9 +691,9 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                             {isChatLoading && (
                                 <div className="flex justify-start animate-fade-in">
                                      <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1.5 items-center w-fit">
-                                        <span className="w-1.5 h-1.5 bg-text-muted/50 rounded-full animate-bounce"></span>
-                                        <span className="w-1.5 h-1.5 bg-text-muted/50 rounded-full animate-bounce delay-75"></span>
-                                        <span className="w-1.5 h-1.5 bg-text-muted/50 rounded-full animate-bounce delay-150"></span>
+                                        <span className="w-1.5 h-1.5 bg-text-muted/50 rounded-full animate-[bounce_1s_infinite_0ms]"></span>
+                                        <span className="w-1.5 h-1.5 bg-text-muted/50 rounded-full animate-[bounce_1s_infinite_200ms]"></span>
+                                        <span className="w-1.5 h-1.5 bg-text-muted/50 rounded-full animate-[bounce_1s_infinite_400ms]"></span>
                                     </div>
                                 </div>
                             )}
@@ -592,7 +730,7 @@ const ResultView: React.FC<ResultViewProps> = ({ result, onReset, user, userProf
                                 <button 
                                     onClick={() => handleSendMessage()}
                                     disabled={isChatLoading || !chatInput.trim()}
-                                    className="p-3 bg-brand-primary rounded-xl text-black hover:bg-brand-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-glow-sm"
+                                    className="p-3 bg-brand-primary rounded-xl text-black hover:bg-brand-hover transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-glow-sm active:scale-95 focus:scale-95 focus:blur-[1px] active:blur-[1px]"
                                 >
                                     <Icons.ArrowRight className="w-5 h-5" />
                                 </button>
@@ -628,13 +766,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
   const [pastedText, setPastedText] = useState('');
   const [showCreditConfirm, setShowCreditConfirm] = useState(false);
   const [pendingAnalysis, setPendingAnalysis] = useState<{ content: string, name: string, type: string } | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false); // New tutorial state
 
   // Fetch History (Initial summary load)
   useEffect(() => {
     const fetchHistory = async () => {
         setIsLoadingHistory(true);
         // We grab just a few for the dashboard summary
-        const data = await getUserAudits(user.uid, null, 5); 
+        const data = await getUserAudits(user.uid, null, 15); 
         setAudits(data.audits);
         setIsLoadingHistory(false);
     };
@@ -690,6 +829,71 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
               pointBorderColor: '#fff',
               pointHoverBackgroundColor: '#fff',
               pointHoverBorderColor: '#10b981'
+          }]
+      };
+  }, [audits]);
+
+  // ERROR DISTRIBUTION CHART (New)
+  const errorData = React.useMemo(() => {
+      const errorCounts: Record<string, number> = {};
+      audits.forEach(audit => {
+          audit.result?.erros?.forEach(err => {
+              errorCounts[err.nome] = (errorCounts[err.nome] || 0) + 1;
+          });
+      });
+
+      const sortedErrors = Object.entries(errorCounts)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 5);
+
+      return {
+          labels: sortedErrors.map(([name]) => name),
+          datasets: [{
+              label: 'Frequência',
+              data: sortedErrors.map(([, count]) => count),
+              backgroundColor: 'rgba(239, 68, 68, 0.5)', // Red 500
+              borderColor: '#ef4444',
+              borderWidth: 1,
+              borderRadius: 4
+          }]
+      };
+  }, [audits]);
+
+  // SCATTER PLOT: SCORE vs RESPONSE TIME (New)
+  const scatterData = React.useMemo(() => {
+      const dataPoints = audits
+          .map(audit => {
+              const score = audit.result?.resumo_executivo?.score || audit.score || 0;
+              const timeStr = audit.result?.resumo_executivo?.estatisticas?.tempo_medio_resposta || "";
+              
+              // Simple parsing for minutes (e.g., "5 min", "2 horas", "30 seg")
+              let minutes = 0;
+              if (timeStr.includes('hora')) {
+                  const match = timeStr.match(/(\d+)/);
+                  if (match) minutes = parseInt(match[1]) * 60;
+              } else if (timeStr.includes('min')) {
+                  const match = timeStr.match(/(\d+)/);
+                  if (match) minutes = parseInt(match[1]);
+              } else if (timeStr.includes('seg')) {
+                  minutes = 0.5; // Treat seconds as minimal
+              } else {
+                  return null; // Skip invalid
+              }
+
+              // Filter out extreme outliers for cleaner chart
+              if (minutes > 300) return null; 
+
+              return { x: minutes, y: score };
+          })
+          .filter(Boolean) as { x: number, y: number }[];
+
+      return {
+          datasets: [{
+              label: 'Score vs Tempo (min)',
+              data: dataPoints,
+              backgroundColor: '#10b981',
+              pointRadius: 6,
+              pointHoverRadius: 8
           }]
       };
   }, [audits]);
@@ -775,7 +979,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
          }
          refreshProfile();
          
-         const { audits: updatedAudits } = await getUserAudits(user.uid, null, 5);
+         const { audits: updatedAudits } = await getUserAudits(user.uid, null, 15);
          setAudits(updatedAudits);
 
          setResult(analysis);
@@ -797,12 +1001,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
     const file = acceptedFiles[0];
     
     setProcessingFileName(file.name);
-    setProcessStatus(`📂 Lendo arquivo...`);
+    setProcessStatus(`📂 Preparando leitura...`);
     setIsProcessing(true);
     setErrorDetails(null); 
 
     try {
-      const text = await extractTextFromFile(file);
+      const text = await extractTextFromFile(file, (status) => setProcessStatus(status));
       setIsProcessing(false); 
       initiateAnalysis(text, file.name, file.type.includes('image') ? 'Imagem' : (file.name.endsWith('.zip') || file.type.includes('zip')) ? 'ZIP' : 'TXT');
     } catch (err: any) {
@@ -816,8 +1020,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
     onDrop,
     accept: {
         'text/plain': ['.txt'],
-        'application/zip': ['.zip', '.x-zip-compressed'],
-        'image/*': ['.png', '.jpg', '.jpeg']
+        'application/zip': ['.zip'],
+        'application/x-zip-compressed': ['.zip'], // Windows
+        'application/x-zip': ['.zip'], 
+        'application/octet-stream': ['.zip'], // Generic
+        'image/jpeg': ['.jpg', '.jpeg'],
+        'image/png': ['.png'],
+        'image/webp': ['.webp']
     },
     multiple: false,
     noClick: true, 
@@ -875,7 +1084,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
   // 2. Settings View
   if (view === 'settings') {
       return (
-          <div className="min-h-screen bg-bg-body text-text-primary p-6">
+          <div className="min-h-screen bg-bg-body text-text-primary p-4 md:p-6">
               <Settings 
                 user={user}
                 userProfile={userProfile}
@@ -892,7 +1101,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
   // 3. History View
   if (view === 'history') {
       return (
-          <div className="min-h-screen bg-bg-body text-text-primary p-6">
+          <div className="min-h-screen bg-bg-body text-text-primary p-4 md:p-6">
               <div className="max-w-6xl mx-auto">
                  <History 
                     userId={user.uid} 
@@ -906,23 +1115,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
 
   // 4. Main Dashboard
   return (
-    <div className="min-h-screen bg-bg-body text-text-primary font-sans relative selection:bg-brand-primary selection:text-black">
+    <div className="min-h-screen bg-bg-body text-text-primary font-sans relative selection:bg-brand-primary selection:text-black pb-20">
       <div className="fixed inset-0 bg-grid-pattern opacity-20 pointer-events-none"></div>
 
       {/* Sticky Premium Header */}
-      <header className="sticky top-0 z-50 bg-[#050505]/90 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between transition-all duration-300">
+      <header className="sticky top-0 z-50 bg-[#050505]/90 backdrop-blur-xl border-b border-white/5 px-4 md:px-6 py-4 flex items-center justify-between transition-all duration-300">
         <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setView('dashboard')}>
             <div className="w-8 h-8 rounded-lg bg-brand-primary/10 flex items-center justify-center border border-brand-primary/20 group-hover:bg-brand-primary/20 transition-all">
               <Icons.ShieldCheck className="h-5 w-5 text-brand-primary" />
             </div>
-            <span className="font-bold text-lg tracking-tight">Fiscal<span className="text-brand-primary">DeVenda</span></span>
+            <span className="font-bold text-lg tracking-tight hidden md:inline">Fiscal<span className="text-brand-primary">DeVenda</span></span>
+            <span className="font-bold text-lg tracking-tight md:hidden">FD<span className="text-brand-primary">V</span></span>
         </div>
 
         <div className="flex items-center gap-3">
              <button onClick={() => setShowPricing(true)} className="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white/5 border border-white/10 rounded-full hover:border-brand-primary/50 hover:bg-white/10 active:scale-95 transition-all group">
                 <Icons.Zap className="w-3.5 h-3.5 text-brand-primary group-hover:scale-110 transition-transform" />
                 <span className="text-sm font-bold text-white">{userProfile.plan === 'pro' ? '∞' : userProfile.credits}</span>
-                {userProfile.plan !== 'pro' && <span className="text-xs text-text-muted mr-1">créditos</span>}
+                {userProfile.plan !== 'pro' && <span className="text-xs text-text-muted mr-1 hidden sm:inline">créditos</span>}
                 <div className="w-6 h-6 rounded-full bg-brand-primary text-black flex items-center justify-center">
                     <Icons.Plus className="w-3.5 h-3.5" />
                 </div>
@@ -961,96 +1171,100 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-10 space-y-10">
+      <main className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-10 space-y-8 md:space-y-10">
          {/* Free Plan Banner with Pulse Animation */}
          {userProfile.plan !== 'pro' && (
-             <div className="bg-gradient-to-r from-brand-primary/20 to-transparent border border-brand-primary/30 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between animate-fade-in shadow-glow-sm relative overflow-hidden group">
+             <div className="bg-gradient-to-r from-brand-primary/20 to-transparent border border-brand-primary/30 rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-center justify-between animate-fade-in shadow-glow-sm relative overflow-hidden group">
                  <div className="absolute inset-0 bg-brand-primary/5 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out pointer-events-none"></div>
-                 <div className="flex items-center gap-4 mb-4 md:mb-0 relative z-10">
-                     <div className="p-3 bg-brand-primary/20 rounded-xl text-brand-primary shadow-inner">
+                 <div className="flex items-center gap-4 mb-4 md:mb-0 relative z-10 w-full md:w-auto">
+                     <div className="p-3 bg-brand-primary/20 rounded-xl text-brand-primary shadow-inner shrink-0">
                          <Icons.Sparkles className="w-6 h-6" />
                      </div>
                      <div>
                          <h3 className="font-bold text-white text-lg">Desbloqueie o Poder Total ⚡</h3>
-                         <p className="text-sm text-text-secondary">Usuários PRO têm auditorias ilimitadas, relatórios de evolução e prioridade na fila.</p>
+                         <p className="text-sm text-text-secondary hidden md:block">Usuários PRO têm auditorias ilimitadas, relatórios de evolução e prioridade na fila.</p>
+                         <p className="text-sm text-text-secondary md:hidden">Auditorias ilimitadas e mais.</p>
                      </div>
                  </div>
-                 <button onClick={() => setShowPricing(true)} className="relative z-10 px-6 py-3 bg-brand-primary text-black font-bold rounded-xl hover:bg-brand-hover active:scale-95 transition-all shadow-lg hover:shadow-glow-md">
-                     Fazer Upgrade Agora
+                 <button onClick={() => setShowPricing(true)} className="relative z-10 px-6 py-3 bg-brand-primary text-black font-bold rounded-xl hover:bg-brand-hover active:scale-95 transition-all shadow-lg hover:shadow-glow-md w-full md:w-auto">
+                     Fazer Upgrade
                  </button>
              </div>
          )}
 
          {/* Hero */}
-         <section className="flex justify-between items-end">
+         <section className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
              <div>
-                <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Olá, {user.displayName?.split(' ')[0] || 'Vendedor'} 👋</h1>
-                <p className="text-text-secondary">Vamos recuperar mais uma venda hoje?</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 tracking-tight">Olá, {user.displayName?.split(' ')[0] || 'Vendedor'} 👋</h1>
+                <p className="text-text-secondary text-sm md:text-base">Vamos recuperar mais uma venda hoje?</p>
              </div>
          </section>
 
          {/* Upload / Paste Zone with enhanced interactions */}
-         <section className="bg-bg-glass border border-white/10 rounded-3xl overflow-hidden transition-all duration-300 hover:border-white/20 hover:shadow-glow-sm">
+         <section className="bg-bg-glass border border-white/10 rounded-3xl overflow-hidden transition-all duration-300 hover:border-white/20 hover:shadow-glow-sm relative">
+             
              <div className="flex border-b border-white/10">
                  <button 
                     onClick={() => setUploadMode('file')}
                     className={`flex-1 py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${uploadMode === 'file' ? 'bg-white/5 text-brand-primary border-b-2 border-brand-primary' : 'text-text-secondary hover:text-white hover:bg-white/5'}`}
                  >
-                     <Icons.Upload className="w-4 h-4" /> Upload de Arquivo
+                     <Icons.Upload className="w-4 h-4" /> Upload
                  </button>
                  <button 
                     onClick={() => setUploadMode('paste')}
                     className={`flex-1 py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${uploadMode === 'paste' ? 'bg-white/5 text-brand-primary border-b-2 border-brand-primary' : 'text-text-secondary hover:text-white hover:bg-white/5'}`}
                  >
-                     <Icons.FileText className="w-4 h-4" /> Colar Conversa
+                     <Icons.FileText className="w-4 h-4" /> Colar
                  </button>
              </div>
 
-             <div className="p-8">
+             <div className="p-6 md:p-8 relative">
+                 {/* Tutorial Trigger Positioned Contextually */}
+                 {uploadMode === 'file' && !isProcessing && (
+                     <div className="absolute top-4 right-4 z-20">
+                         <button onClick={() => setShowTutorial(true)} className="text-xs text-brand-primary/80 hover:text-brand-primary transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-primary/5 border border-brand-primary/10 hover:bg-brand-primary/10 hover:border-brand-primary/30">
+                             <Icons.HelpCircle className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Como exportar?</span><span className="sm:hidden">Ajuda</span>
+                         </button>
+                     </div>
+                 )}
+
                  {uploadMode === 'file' ? (
                      <div 
                         {...getRootProps()} 
                         onClick={openFileDialog}
                         className={`
-                            border-2 border-dashed rounded-2xl p-12 text-center transition-all cursor-pointer relative group
+                            border-2 border-dashed rounded-2xl p-6 md:p-12 text-center transition-all cursor-pointer relative group
                             ${isDragActive ? 'border-brand-primary bg-brand-primary/5 scale-[1.01]' : 'border-white/10 hover:border-brand-primary hover:bg-white/5'}
                             ${isProcessing ? 'pointer-events-none border-brand-primary/50' : ''}
                         `}
                     >
                         <input {...getInputProps()} />
                         
-                        {/* Tooltip for prints */}
-                        {!isProcessing && (
-                            <div className="absolute top-4 right-4 z-20">
-                                <Icons.HelpCircle className="w-5 h-5 text-text-muted hover:text-white transition-colors" />
-                                <div className="absolute right-0 top-8 w-64 bg-[#111] border border-white/20 p-3 rounded-xl text-xs text-left z-30 hidden group-hover:block shadow-xl animate-fade-in">
-                                    <p className="font-bold text-white mb-1">Dica para Prints:</p>
-                                    <p className="text-text-muted">Certifique-se de que as imagens tenham alta qualidade e que haja sobreposição de texto entre um print e outro para a IA conectar o contexto.</p>
-                                </div>
-                            </div>
-                        )}
-
                         <div className="flex flex-col items-center justify-center min-h-[160px]">
                             {isProcessing ? (
                                 <div className="w-full max-w-md space-y-6">
                                     <div className="flex flex-col items-center">
-                                        <div className="w-16 h-16 relative">
-                                            <div className="absolute inset-0 rounded-full border-4 border-white/10"></div>
-                                            <div className="absolute inset-0 rounded-full border-4 border-brand-primary border-t-transparent animate-spin"></div>
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <Icons.Sparkles className="w-6 h-6 text-brand-primary animate-pulse" />
+                                        {/* Improved Loading Pulse */}
+                                        <div className="relative mb-4">
+                                            <div className="w-20 h-20 rounded-full bg-brand-primary/10 flex items-center justify-center animate-pulse">
+                                                <Icons.FileText className="w-10 h-10 text-brand-primary" />
                                             </div>
+                                            <div className="absolute inset-0 rounded-full border-2 border-brand-primary/50 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
+                                            <div className="absolute inset-0 rounded-full border border-brand-primary/30 animate-[spin_3s_linear_infinite]"></div>
                                         </div>
                                     </div>
                                     <div className="text-center space-y-2">
-                                        <h3 className="text-lg font-bold text-white">{processStatus}</h3>
-                                        <p className="text-sm text-text-muted font-mono bg-white/5 px-2 py-1 rounded inline-block">
+                                        <h3 className="text-lg font-bold text-white flex items-center justify-center gap-2">
+                                            {processStatus}
+                                        </h3>
+                                        <p className="text-sm text-text-muted font-mono bg-white/5 px-3 py-1.5 rounded-full inline-block border border-white/10 max-w-full truncate">
                                             {processingFileName}
                                         </p>
                                     </div>
-                                    {/* Simulated Progress Bar */}
-                                    <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
-                                        <div className="h-full bg-brand-primary rounded-full animate-[shimmer_2s_linear_infinite] bg-[length:200%_100%] w-2/3 mx-auto"></div>
+                                    {/* Enhanced Gradient Progress Bar */}
+                                    <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden mt-4 relative">
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent w-1/2 -translate-x-full animate-[shimmer_1s_infinite_linear]"></div>
+                                        <div className="h-full bg-gradient-to-r from-brand-primary to-blue-500 rounded-full animate-[shimmer_1.5s_infinite_linear] bg-[length:200%_100%] w-full origin-left"></div>
                                     </div>
                                 </div>
                             ) : (
@@ -1060,12 +1274,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
                                     </div>
                                     
                                     <h3 className="text-xl font-bold text-white mb-2">Arraste ou clique para enviar</h3>
-                                    <p className="text-text-secondary mb-4 text-sm">Suporta .txt (WhatsApp), .zip ou Prints</p>
+                                    <p className="text-text-secondary mb-4 text-sm">Suporta .txt, .zip ou Prints</p>
                                     
                                     <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl flex items-start gap-3 text-left max-w-md mx-auto">
                                         <Icons.Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
                                         <p className="text-xs text-blue-200">
-                                            <strong>Dica:</strong> Para conversas longas, prefira exportar o histórico do WhatsApp em .txt para maior precisão.
+                                            <strong>Dica:</strong> Para conversas longas ou com áudios, exporte o ZIP do WhatsApp. Identificamos se houve troca de áudios automaticamente.
                                         </p>
                                     </div>
                                 </>
@@ -1084,7 +1298,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
                              <button 
                                 onClick={handlePasteAnalysis}
                                 disabled={isProcessing}
-                                className="px-6 py-3 bg-brand-primary text-black font-bold rounded-xl hover:bg-brand-hover active:scale-95 transition-all shadow-glow-sm disabled:opacity-50 flex items-center gap-2"
+                                className="px-6 py-3 bg-brand-primary text-black font-bold rounded-xl hover:bg-brand-hover active:scale-95 transition-all shadow-glow-sm disabled:opacity-50 flex items-center gap-2 w-full md:w-auto justify-center"
                             >
                                  {isProcessing ? 'Processando...' : <>Analisar Texto <Icons.ArrowRight className="w-4 h-4" /></>}
                              </button>
@@ -1117,8 +1331,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
              ))}
          </section>
 
-         {/* Charts & Graphs (Radar + Line) */}
+         {/* Charts & Graphs (Line, Radar, Bar, Scatter) */}
          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+             {/* Evolution (Line) */}
              <div className="glass-card border border-white/5 rounded-3xl p-6">
                  <div className="flex items-center justify-between mb-6">
                      <h3 className="font-bold text-white flex items-center gap-2">
@@ -1138,10 +1353,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
                  </div>
              </div>
 
+             {/* Competencies (Radar) */}
              <div className="glass-card border border-white/5 rounded-3xl p-6">
                  <div className="flex items-center justify-between mb-6">
                      <h3 className="font-bold text-white flex items-center gap-2">
-                         <Icons.Target className="w-5 h-5 text-blue-500" /> Competências (Radar)
+                         <Icons.Target className="w-5 h-5 text-blue-500" /> Competências
                      </h3>
                  </div>
                  <div className="h-[250px] flex items-center justify-center">
@@ -1151,9 +1367,76 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
                         </Suspense>
                     ) : (
                         <div className="text-sm text-text-muted border-2 border-dashed border-white/5 rounded-xl p-6">
-                            Necessário ao menos 3 auditorias para gerar o radar de competências.
+                            Necessário ao menos 3 auditorias para gerar o radar.
                         </div>
                     )}
+                 </div>
+             </div>
+
+             {/* Top Errors (Bar) - NEW */}
+             <div className="glass-card border border-white/5 rounded-3xl p-6">
+                 <div className="flex items-center justify-between mb-6">
+                     <h3 className="font-bold text-white flex items-center gap-2">
+                         <Icons.AlertTriangle className="w-5 h-5 text-red-500" /> Erros Mais Comuns
+                     </h3>
+                 </div>
+                 <div className="h-[250px]">
+                     {audits.length > 0 ? (
+                         <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-text-muted animate-pulse">Carregando...</div>}>
+                             <Bar 
+                                data={errorData} 
+                                options={{
+                                    ...chartOptions,
+                                    indexAxis: 'y' as const, // Horizontal bars
+                                    scales: {
+                                        x: { display: false, grid: { display: false } },
+                                        y: { ticks: { color: 'rgba(255,255,255,0.7)', font: { size: 11 } }, grid: { display: false } }
+                                    }
+                                }} 
+                             />
+                         </Suspense>
+                     ) : (
+                         <div className="h-full flex items-center justify-center text-text-muted text-sm border-2 border-dashed border-white/5 rounded-xl">
+                             Sem dados suficientes
+                         </div>
+                     )}
+                 </div>
+             </div>
+
+             {/* Score vs Response Time (Scatter) - NEW */}
+             <div className="glass-card border border-white/5 rounded-3xl p-6">
+                 <div className="flex items-center justify-between mb-6">
+                     <h3 className="font-bold text-white flex items-center gap-2">
+                         <Icons.Clock className="w-5 h-5 text-orange-500" /> Score x Tempo de Resposta
+                     </h3>
+                 </div>
+                 <div className="h-[250px]">
+                     {scatterData.datasets[0].data.length > 0 ? (
+                         <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-text-muted animate-pulse">Carregando...</div>}>
+                             <Scatter 
+                                data={scatterData} 
+                                options={{
+                                    ...chartOptions,
+                                    scales: {
+                                        x: { 
+                                            title: { display: true, text: 'Tempo Médio (minutos)', color: '#666' },
+                                            grid: { color: 'rgba(255,255,255,0.05)' },
+                                            ticks: { color: '#888' }
+                                        },
+                                        y: { 
+                                            min: 0, max: 100,
+                                            title: { display: true, text: 'Score', color: '#666' },
+                                            grid: { color: 'rgba(255,255,255,0.05)' }
+                                        }
+                                    }
+                                }} 
+                             />
+                         </Suspense>
+                     ) : (
+                         <div className="h-full flex items-center justify-center text-text-muted text-sm border-2 border-dashed border-white/5 rounded-xl">
+                             Sem dados de tempo
+                         </div>
+                     )}
                  </div>
              </div>
          </section>
@@ -1215,8 +1498,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
                       )}
                   </div>
                   <div className="space-y-3">
-                      <button onClick={confirmAnalysis} className="w-full py-3 rounded-xl bg-brand-primary text-black text-sm font-bold hover:bg-brand-hover transition-colors shadow-glow-sm flex items-center justify-center gap-2 active:scale-95">
-                          Confirmar Auditoria <Icons.ArrowRight className="w-4 h-4" />
+                      <button 
+                        onClick={confirmAnalysis} 
+                        className="w-full py-3.5 rounded-xl bg-gradient-to-r from-brand-primary to-emerald-400 text-black text-sm font-bold hover:shadow-glow-md transition-all shadow-lg flex items-center justify-center gap-2 active:scale-95 group relative overflow-hidden"
+                      >
+                          <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                          <span className="relative z-10 flex items-center gap-2">Confirmar Auditoria <Icons.ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></span>
                       </button>
                       <button onClick={() => setShowCreditConfirm(false)} className="w-full py-3 rounded-xl border border-white/10 hover:bg-white/5 text-white text-sm font-medium transition-colors">
                           Cancelar
@@ -1232,6 +1519,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
               </div>
           </div>
       )}
+
+      {/* Tutorial Modal */}
+      {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
 
       {/* Pricing Modal */}
       {showPricing && (
