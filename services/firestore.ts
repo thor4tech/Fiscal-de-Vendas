@@ -1,17 +1,26 @@
 import { db } from "./firebase";
-import { collection, addDoc, query, where, orderBy, getDocs, Timestamp, doc, getDoc, setDoc, updateDoc, increment, limit, startAfter, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, getDocs, Timestamp, doc, getDoc, setDoc, updateDoc, increment, limit, startAfter, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 import { AnalysisResult, AuditRecord, UserProfile } from "../types";
+
+// ==========================================
+// AUDITS (SUB-COLLECTION)
+// Path: users/{userId}/audits/{auditId}
+// ==========================================
 
 export const saveAudit = async (userId: string, fileName: string, fileType: string, result: AnalysisResult) => {
   try {
-    await addDoc(collection(db, "audits"), {
-      userId,
+    // CHANGE: Reference the sub-collection 'audits' INSIDE the specific 'user' document
+    const userAuditsRef = collection(db, "users", userId, "audits");
+    
+    await addDoc(userAuditsRef, {
       fileName,
       fileType,
       result,
       score: result.resumo_executivo.score,
       verdict: result.resumo_executivo.classificacao,
       timestamp: Timestamp.now()
+      // Note: We don't strictly need to save 'userId' inside the doc anymore 
+      // because the path itself identifies the user, but it's fine to keep or remove.
     });
   } catch (error) {
     console.error("Error saving audit:", error);
@@ -25,20 +34,23 @@ export const getUserAudits = async (
   pageSize: number = 10
 ): Promise<{ audits: AuditRecord[], lastVisible: QueryDocumentSnapshot<DocumentData> | null }> => {
   try {
+    // CHANGE: Query the sub-collection inside the user
+    const userAuditsRef = collection(db, "users", userId, "audits");
+    
     let q;
 
+    // Note: We REMOVED 'where("userId", "==", userId)' because we are already 
+    // pointing directly to that user's specific collection.
     if (lastDoc) {
       q = query(
-        collection(db, "audits"),
-        where("userId", "==", userId),
+        userAuditsRef,
         orderBy("timestamp", "desc"),
         startAfter(lastDoc),
         limit(pageSize)
       );
     } else {
       q = query(
-        collection(db, "audits"),
-        where("userId", "==", userId),
+        userAuditsRef,
         orderBy("timestamp", "desc"),
         limit(pageSize)
       );
@@ -62,15 +74,14 @@ export const getUserAudits = async (
     return { audits, lastVisible };
   } catch (error: any) {
     console.error("Error fetching audits:", error);
-    if (error.code === 'failed-precondition') {
-        // This log is crucial for the developer to create the index
-        console.warn("⚠️ INDEX MISSING: Click the link in the console to create the composite index in Firebase.");
-    }
     return { audits: [], lastVisible: null };
   }
 };
 
-// User Profile & Credits Management
+// ==========================================
+// USER PROFILE & CREDITS (ROOT COLLECTION)
+// Path: users/{userId}
+// ==========================================
 
 export const getOrCreateUserProfile = async (uid: string, email: string | null): Promise<UserProfile> => {
   const userRef = doc(db, "users", uid);
