@@ -5,35 +5,23 @@ import { AnalysisResult, ChatMessage } from "../types";
 const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
 
 if (!apiKey) {
-    console.warn("Gemini API Key não encontrada! Verifique as variáveis de ambiente.");
+    console.error("CRÍTICO: Gemini API Key não encontrada!");
 }
 
 const ai = new GoogleGenAI({ apiKey: apiKey || "dummy_key" });
 
 const SYSTEM_PROMPT = `
-Você é o FISCAL DE VENDA, um auditor IMPLACÁVEL e DETALHISTA de conversas de vendas.
+Você é o FISCAL DE VENDA. Analise a conversa do WhatsApp e gere um diagnóstico JSON.
 
-SUA MISSÃO:
-Analisar conversas de vendas e entregar um diagnóstico TÃO COMPLETO que o vendedor saia sabendo EXATAMENTE o que fazer.
-
-VOCÊ DEVE ANALISAR:
-1. CADA MENSAGEM (Timestamp, Autor, Status)
-2. TEMPO DE RESPOSTA (Delays críticos)
-3. FLUXO EMOCIONAL (Interesse vs Ruptura)
-4. ERROS (Críticos, Médios, Leves) com correção EXATA
-5. TÉCNICAS (O que faltou usar)
-6. MÉTRICAS (Rapport, Escuta, Objeções, Clareza, Urgência, Profissionalismo)
-7. PLANO DE RECUPERAÇÃO (Script prático)
-
-FORMATO DE RESPOSTA (JSON):
+ESTRUTURA OBRIGATÓRIA DO JSON:
 {
   "resumo_executivo": {
-    "score": number,
+    "score": number (0-100),
     "classificacao": "CRÍTICO" | "REGULAR" | "BOM" | "EXCELENTE",
-    "veredicto": "string",
+    "veredicto": "Resumo curto e direto do problema principal.",
     "estatisticas": {
       "total_mensagens": number,
-      "tempo_medio_resposta": "string",
+      "tempo_medio_resposta": "string (ex: 5 min)",
       "total_erros": number,
       "chance_recuperacao": "ALTA" | "MÉDIA" | "BAIXA"
     }
@@ -47,12 +35,12 @@ FORMATO DE RESPOSTA (JSON):
     "mensagens": [
       {
         "numero": number,
-        "timestamp": "string | null",
+        "timestamp": "string (hora) ou null",
         "autor": "Cliente" | "Vendedor",
-        "texto": "string",
+        "texto": "string (max 100 chars)",
         "status": "bom" | "atencao" | "erro",
-        "tempo_resposta": "string | null",
-        "analise": "string"
+        "tempo_resposta": "string ou null",
+        "analise": "string (max 1 frase)"
       }
     ]
   },
@@ -73,12 +61,12 @@ FORMATO DE RESPOSTA (JSON):
     { "nome": "string", "descricao": "string", "como_aplicar": "string" }
   ],
   "metricas": {
-    "rapport": { "nota": number, "significado": "string", "problema": "string", "como_melhorar": "string" },
-    "escuta_ativa": { "nota": number, "significado": "string", "problema": "string", "como_melhorar": "string" },
-    "tratamento_objecoes": { "nota": number, "significado": "string", "problema": "string", "como_melhorar": "string" },
-    "clareza": { "nota": number, "significado": "string", "problema": "string", "como_melhorar": "string" },
-    "urgencia": { "nota": number, "significado": "string", "problema": "string", "como_melhorar": "string" },
-    "profissionalismo": { "nota": number, "significado": "string", "problema": "string", "como_melhorar": "string" },
+    "rapport": { "nota": number, "significado": "Rapport", "problema": "string", "como_melhorar": "string" },
+    "escuta_ativa": { "nota": number, "significado": "Escuta", "problema": "string", "como_melhorar": "string" },
+    "tratamento_objecoes": { "nota": number, "significado": "Objeções", "problema": "string", "como_melhorar": "string" },
+    "clareza": { "nota": number, "significado": "Clareza", "problema": "string", "como_melhorar": "string" },
+    "urgencia": { "nota": number, "significado": "Urgência", "problema": "string", "como_melhorar": "string" },
+    "profissionalismo": { "nota": number, "significado": "Profissionalismo", "problema": "string", "como_melhorar": "string" },
     "tempo_resposta": { "nota": number, "media": "string", "ideal": "string", "pior": "string", "problema": "string", "como_melhorar": "string" }
   },
   "plano_recuperacao": {
@@ -92,20 +80,24 @@ FORMATO DE RESPOSTA (JSON):
     { "categoria": "string", "itens": ["string"] }
   ]
 }
+
+REGRAS:
+1. Retorne APENAS o JSON.
+2. Seja conciso nos textos para evitar cortar a resposta.
+3. Se a conversa for curta, faça uma análise baseada no que existe.
 `;
 
 export async function analyzeConversation(conversationText: string): Promise<AnalysisResult> {
   try {
-    // ALTERAÇÃO CRÍTICA: Mudança para gemini-2.0-flash-exp
-    // O modelo 3-pro é muito lento e causa timeout no Vercel/Frontend. 
-    // O Flash é otimizado para velocidade e mantém alta capacidade de seguir JSON.
+    // Revertendo para gemini-2.0-flash-exp conforme solicitado ("IA anterior")
     const modelId = 'gemini-2.0-flash-exp';
     
     const prompt = `
 ${SYSTEM_PROMPT}
 
 CONVERSA PARA ANÁLISE:
-${conversationText}
+${conversationText.slice(0, 30000)} 
+(Texto truncado para segurança se for muito longo)
 
 Analise e retorne APENAS o JSON válido.
 `;
@@ -115,19 +107,28 @@ Analise e retorne APENAS o JSON válido.
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
-        temperature: 0.4 // Temperatura mais baixa para garantir JSON estruturado
+        temperature: 0.4
       }
     });
 
     const jsonStr = response.text || "{}";
+    // Limpeza extra para garantir JSON válido
     const cleanJson = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
     
-    const parsedData = JSON.parse(cleanJson) as AnalysisResult;
-    return parsedData;
+    try {
+        const parsedData = JSON.parse(cleanJson) as AnalysisResult;
+        return parsedData;
+    } catch (parseError) {
+        console.error("Erro ao fazer parse do JSON:", cleanJson);
+        throw new Error("A resposta da IA foi interrompida ou é inválida. Tente uma conversa menor.");
+    }
 
-  } catch (error) {
-    console.error("Gemini Analysis Error:", error);
-    throw new Error("Falha ao processar a análise. O texto pode ser muito longo ou a API está instável. Tente novamente.");
+  } catch (error: any) {
+    console.error("Gemini Analysis Error Completo:", error);
+    if (error.message?.includes('404')) {
+         throw new Error("Modelo de IA não encontrado. Verifique sua chave de API ou use gemini-1.5-flash.");
+    }
+    throw new Error(`Falha na análise: ${error.message || "Erro desconhecido"}`);
   }
 }
 
@@ -143,13 +144,12 @@ export async function continueChat(
 CONTEXTO DA AUDITORIA:
 Score: ${contextAnalysis.resumo_executivo.score}
 Veredicto: ${contextAnalysis.resumo_executivo.veredicto}
-Erros: ${contextAnalysis.erros.map(e => e.nome).join(', ')}
 ` : "";
 
         const chat = ai.chats.create({
             model: modelId,
             config: {
-                systemInstruction: `Você é o FISCAL DE VENDA. Ajude o usuário com dúvidas sobre a auditoria. Seja direto. ${contextString}`
+                systemInstruction: `Você é o FISCAL DE VENDA. Seja direto e ajude o usuário. ${contextString}`
             },
             history: history.map(h => ({
                 role: h.role,

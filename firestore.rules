@@ -1,28 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Função auxiliar para verificar autenticação
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    // Função auxiliar para verificar se o usuário é dono do documento
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    // Regras para a coleção principal de USUÁRIOS
+    // Permite que qualquer usuário autenticado leia/escreva EM SUA PRÓPRIA sub-árvore
     match /users/{userId} {
-      // Permite ler e escrever o perfil e créditos apenas se for o dono
-      allow read, write: if isAuthenticated() && isOwner(userId);
+      allow read, write: if request.auth != null && request.auth.uid == userId;
 
-      // Regras para a SUB-COLEÇÃO de Auditorias (Aninhada dentro do usuário)
-      // Caminho: /users/{userId}/audits/{auditId}
+      // Importante: Regra explícita para a sub-coleção 'audits'
       match /audits/{auditId} {
-        // Como já estamos dentro do match /users/{userId}, a regra acima já protege parcialmente,
-        // mas reforçamos que apenas o dono desse userId pode ler/escrever aqui.
-        allow read, write: if isAuthenticated() && isOwner(userId);
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
   }

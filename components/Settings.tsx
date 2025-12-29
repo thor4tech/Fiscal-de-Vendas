@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Icons } from './ui/Icons';
 import { User, UserProfile } from '../types';
 import { updateProfile } from 'firebase/auth';
-import { auth } from '../services/firebase';
+import { auth, storage } from '../services/firebase';
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface SettingsProps {
   user: User;
@@ -25,6 +26,38 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
   const [photoURL, setPhotoURL] = useState(user.photoURL || '');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  
+  // File Upload Ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0 && auth.currentUser) {
+        const file = files[0];
+        
+        if (file.size > 5 * 1024 * 1024) {
+            setSaveMessage("Arquivo muito grande. Máximo 5MB.");
+            return;
+        }
+
+        setIsSaving(true);
+        setSaveMessage("Enviando imagem...");
+
+        try {
+            const storageRef = ref(storage, `avatars/${auth.currentUser.uid}/${Date.now()}_${file.name}`);
+            await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(storageRef);
+            
+            setPhotoURL(downloadURL);
+            setSaveMessage("Imagem carregada! Clique em Salvar Alterações.");
+        } catch (error: any) {
+            console.error("Upload Error:", error);
+            setSaveMessage(`Erro no upload: ${error.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!auth.currentUser) return;
@@ -35,13 +68,18 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
             displayName: displayName,
             photoURL: photoURL
         });
-        setSaveMessage("Perfil atualizado com sucesso! (Recarregue para ver a foto)");
-        // Force reload usually needed to see Auth changes immediately across app if not using a listener that updates deeply
+        setSaveMessage("Perfil atualizado com sucesso!");
     } catch (error) {
         console.error(error);
         setSaveMessage("Erro ao atualizar perfil.");
     } finally {
         setIsSaving(false);
+    }
+  };
+
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+        fileInputRef.current.click();
     }
   };
 
@@ -99,21 +137,39 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
                         
                         <div className="flex flex-col md:flex-row gap-8">
                             <div className="flex flex-col items-center gap-4">
-                                <div className="w-24 h-24 rounded-full border-2 border-white/10 overflow-hidden relative">
+                                {/* Clickable Avatar Area */}
+                                <div 
+                                    onClick={triggerFileInput}
+                                    className="w-32 h-32 rounded-full border-4 border-white/10 overflow-hidden relative group cursor-pointer shadow-xl hover:border-brand-primary transition-colors"
+                                >
                                     {photoURL ? (
-                                        <img src={photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                                        <img src={photoURL} alt="Avatar" className="w-full h-full object-cover group-hover:opacity-40 transition-opacity" />
                                     ) : (
-                                        <div className="w-full h-full bg-brand-primary text-black flex items-center justify-center font-bold text-3xl">
+                                        <div className="w-full h-full bg-brand-primary text-black flex items-center justify-center font-bold text-4xl group-hover:opacity-40 transition-opacity">
                                             {displayName?.[0] || 'U'}
                                         </div>
                                     )}
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Icons.Upload className="w-8 h-8 text-white mb-1" />
+                                        <span className="text-xs text-white font-bold">Alterar</span>
+                                    </div>
                                 </div>
-                                <div className="text-xs text-text-muted text-center max-w-[150px]">
-                                    Para mudar a foto, cole uma URL de imagem pública abaixo.
-                                </div>
+                                <input 
+                                    type="file" 
+                                    ref={fileInputRef} 
+                                    onChange={handleFileChange} 
+                                    className="hidden" 
+                                    accept="image/*"
+                                />
+                                <button 
+                                    onClick={triggerFileInput}
+                                    className="text-sm text-brand-primary hover:text-white transition-colors font-medium"
+                                >
+                                    Trocar foto
+                                </button>
                             </div>
                             
-                            <div className="flex-1 space-y-4">
+                            <div className="flex-1 space-y-4 pt-2">
                                 <div>
                                     <label className="block text-xs text-text-muted uppercase font-bold mb-2">Nome de Exibição</label>
                                     <input 
@@ -126,17 +182,6 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
                                 </div>
                                 
                                 <div>
-                                    <label className="block text-xs text-text-muted uppercase font-bold mb-2">URL da Foto de Perfil</label>
-                                    <input 
-                                        type="text" 
-                                        value={photoURL} 
-                                        onChange={(e) => setPhotoURL(e.target.value)}
-                                        className="w-full bg-bg-body border border-white/10 rounded-xl px-4 py-3 text-text-primary focus:outline-none focus:border-brand-primary transition-colors"
-                                        placeholder="https://exemplo.com/sua-foto.jpg"
-                                    />
-                                </div>
-                                
-                                <div>
                                      <label className="block text-xs text-text-muted uppercase font-bold mb-2">Email</label>
                                      <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 opacity-60 cursor-not-allowed">
                                          <span className="text-text-primary flex-1">{user.email}</span>
@@ -145,9 +190,9 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
                                 </div>
 
                                 {saveMessage && (
-                                    <p className={`text-sm ${saveMessage.includes('sucesso') ? 'text-green-400' : 'text-red-400'}`}>
+                                    <div className={`p-3 rounded-lg border text-sm ${saveMessage.includes('sucesso') || saveMessage.includes('carregada') ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
                                         {saveMessage}
-                                    </p>
+                                    </div>
                                 )}
 
                                 <div className="pt-4">
@@ -289,7 +334,6 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
                                 </button>
                             </div>
 
-                             {/* Removed Notification Options as requested */}
                              <div className="p-4 bg-bg-body rounded-xl border border-white/5 opacity-50">
                                 <div className="flex items-center gap-2 text-text-muted mb-2">
                                     <Icons.Info className="w-4 h-4" />

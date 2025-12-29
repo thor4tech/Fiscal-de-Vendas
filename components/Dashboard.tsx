@@ -240,7 +240,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
      } catch (err: any) {
          console.error(err);
          setError(err.message || "Erro ao processar.");
-         setToast({ message: "Erro na análise.", type: 'error' });
+         setToast({ message: "Erro na análise: " + err.message, type: 'error' });
      } finally {
          setIsProcessing(false);
          setProcessStatus('');
@@ -373,10 +373,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, userProfile, refresh
         </div>
 
         <div className="flex items-center gap-3">
-             <button className="relative w-10 h-10 flex items-center justify-center bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 active:scale-95 transition-all">
-                <Icons.Bell className="w-4 h-4 text-text-secondary" />
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-lg">2</span>
-            </button>
+             {/* Bell Icon Removed as requested */}
 
              <button onClick={() => setShowPricing(true)} className="flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white/5 border border-white/10 rounded-full hover:border-brand-primary/50 hover:bg-white/10 active:scale-95 transition-all group">
                 <Icons.Zap className="w-3.5 h-3.5 text-brand-primary group-hover:scale-110 transition-transform" />
