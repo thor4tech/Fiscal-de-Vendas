@@ -18,7 +18,7 @@ interface SettingsProps {
 
 type SettingsTab = 'profile' | 'subscription' | 'preferences';
 
-// Stripe Price IDs
+// Stripe Price IDs (CORRIGIDOS)
 const PRICE_STARTER = "price_1SjnY38sPBgjqi0CfiIPc0hK";
 const PRICE_PRO = "price_1SjnXY8sPBgjqi0CWl78VfDb";
 
