@@ -131,12 +131,20 @@ export const createCheckoutSession = async (uid: string, priceId: string, mode: 
   
   // CONSTANTES DE ID (Validando explicitamente qual plano é)
   const PRO_PRICE_ID = "price_1SjnXY8sPBgjqi0CWl78VfDb";
-  // O ID do Starter é price_1SjnY38sPBgjqi0CfiIPc0hK, qualquer outro cai aqui se não for o Pro
+  const STARTER_PRICE_ID = "price_1SjnY38sPBgjqi0CfiIPc0hK";
 
   // Identifica qual plano está sendo comprado para passar na URL de retorno com segurança
   let planType = 'starter';
+  let sessionMode = mode;
+
   if (priceId === PRO_PRICE_ID) {
       planType = 'pro';
+      sessionMode = 'subscription';
+  } else if (priceId === STARTER_PRICE_ID) {
+      // Se o ID do Starter foi configurado como recorrente no Stripe, forçamos 'subscription' aqui para evitar erro
+      // O erro "You specified payment mode but passed a recurring price" indica isso.
+      planType = 'starter';
+      sessionMode = 'subscription'; 
   }
 
   // Cria o documento que aciona a Cloud Function da extensão do Stripe
@@ -144,7 +152,7 @@ export const createCheckoutSession = async (uid: string, priceId: string, mode: 
     price: priceId,
     success_url: `${window.location.origin}/?success=true&plan=${planType}`, // Passa o plano correto na URL
     cancel_url: window.location.origin, 
-    mode: mode, // 'subscription' para recorrente, 'payment' para único
+    mode: sessionMode, 
   });
 
   return new Promise<string>((resolve, reject) => {

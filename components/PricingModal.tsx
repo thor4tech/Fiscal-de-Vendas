@@ -24,6 +24,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({ onClose, isProcessin
     setIsRedirecting(true);
     setErrorMessage(null);
     try {
+      // Note: The firestore service will enforce the correct mode based on ID to prevent errors
       const url = await createCheckoutSession(auth.currentUser.uid, priceId, mode);
       window.location.assign(url);
     } catch (error) {
@@ -136,7 +137,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({ onClose, isProcessin
                 </div>
 
                 {/* Starter Pack */}
-                <div className="group relative border border-white/10 rounded-2xl p-6 hover:border-white/30 transition-all bg-white/[0.02] cursor-pointer hover:bg-white/[0.04]" onClick={() => handleSubscribe(PRICE_STARTER, 'payment')}>
+                <div className="group relative border border-white/10 rounded-2xl p-6 hover:border-white/30 transition-all bg-white/[0.02] cursor-pointer hover:bg-white/[0.04]" onClick={() => handleSubscribe(PRICE_STARTER, 'subscription')}>
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <h4 className="font-bold text-white text-lg">Starter Pack</h4>

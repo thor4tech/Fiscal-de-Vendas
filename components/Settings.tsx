@@ -92,6 +92,7 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
     setIsSubscribing(true);
     setSubscriptionError(null);
     try {
+        // Mode will be handled/forced by firestore service if necessary based on ID
         const url = await createCheckoutSession(auth.currentUser.uid, priceId, mode);
         window.location.assign(url);
     } catch (error: any) {
@@ -296,7 +297,7 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
                             </ul>
 
                             <button 
-                                onClick={() => !isPro && handleSubscribe(PRICE_STARTER, 'payment')}
+                                onClick={() => !isPro && handleSubscribe(PRICE_STARTER, 'subscription')}
                                 disabled={isSubscribing || isPro}
                                 className="w-full py-4 rounded-xl border border-white/20 text-white font-bold text-sm hover:bg-white hover:text-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             >
