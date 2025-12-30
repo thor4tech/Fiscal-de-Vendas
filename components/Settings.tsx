@@ -34,6 +34,7 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
   
   // Subscription State
   const [isSubscribing, setIsSubscribing] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
   
   // File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,12 +90,13 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
     if (!auth.currentUser) return;
     
     setIsSubscribing(true);
+    setSubscriptionError(null);
     try {
         const url = await createCheckoutSession(auth.currentUser.uid, priceId, mode);
         window.location.assign(url);
     } catch (error: any) {
         console.error("Erro no checkout:", error);
-        alert(`Erro ao iniciar pagamento: ${error.message}`);
+        setSubscriptionError(`Erro ao iniciar pagamento: ${error.message}`);
         setIsSubscribing(false);
     }
   };
@@ -236,6 +238,14 @@ export const Settings: React.FC<SettingsProps> = ({ user, userProfile, theme, to
             {activeTab === 'subscription' && (
                 <div className="space-y-8 animate-fade-in">
                     
+                    {/* Error Display */}
+                    {subscriptionError && (
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-center gap-3">
+                            <Icons.AlertTriangle className="w-5 h-5 shrink-0" />
+                            <span className="text-sm font-medium">{subscriptionError}</span>
+                        </div>
+                    )}
+
                     {/* Header Status */}
                     <div className="glass-card p-6 rounded-2xl flex items-center justify-between border border-white/10 bg-[#0a0a0a]">
                         <div className="flex items-center gap-4">

@@ -16,18 +16,20 @@ const PRICE_PRO = "price_1SjnXY8sPBgjqi0CWl78VfDb";
 
 export const PricingModal: React.FC<PricingModalProps> = ({ onClose, isProcessing, currentCredits }) => {
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubscribe = async (priceId: string, mode: 'subscription' | 'payment') => {
     if (!auth.currentUser) return;
     
     setIsRedirecting(true);
+    setErrorMessage(null);
     try {
       const url = await createCheckoutSession(auth.currentUser.uid, priceId, mode);
       window.location.assign(url);
     } catch (error) {
       console.error("Erro ao criar sessão de checkout:", error);
       setIsRedirecting(false);
-      alert("Ocorreu um erro ao iniciar o pagamento. Tente novamente.");
+      setErrorMessage("Erro ao conectar com o provedor de pagamento. Tente novamente.");
     }
   };
 
@@ -96,6 +98,13 @@ export const PricingModal: React.FC<PricingModalProps> = ({ onClose, isProcessin
         <div className="p-8 md:p-12 md:w-7/12 bg-bg-body overflow-y-auto">
             <h3 className="text-2xl font-bold text-white mb-8">Escolha seu plano</h3>
             
+            {errorMessage && (
+                <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-3">
+                    <Icons.AlertTriangle className="w-5 h-5 shrink-0" />
+                    {errorMessage}
+                </div>
+            )}
+
             <div className="space-y-6">
                 
                 {/* Vendedor Pro (Highlighted) */}
